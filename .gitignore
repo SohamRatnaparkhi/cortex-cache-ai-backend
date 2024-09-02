@@ -1,0 +1,5 @@
+content-processor/env_content_processor
+tmp
+content-processor/.env
+
+**.pyc
