@@ -1,4 +1,6 @@
+import concurrent.futures
 import io
+import math
 import os
 import tempfile
 import uuid
@@ -11,8 +13,7 @@ from pydub.silence import split_on_silence
 
 r = sr.Recognizer()
 
-model = whisper.load_model("base")
-
+model = whisper.load_model("tiny")
 
 def extract_audio_from_video(video_bytes):
     """Extract audio from video bytes and return audio content."""
@@ -30,50 +31,68 @@ def extract_audio_from_video(video_bytes):
         os.unlink(temp_video_path)
 
 
-def transcribe_audio_whisper(audio_content):
-    """Transcribe audio using Whisper."""
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:
-        temp_audio.write(audio_content)
-        temp_audio_path = temp_audio.name
+def transcribe_audio_chunk(chunk, chunk_index):
+    """Transcribe a single audio chunk using Whisper."""
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_chunk:
+        chunk = chunk.set_frame_rate(16000).set_channels(
+            1)  # Ensure correct format
+        chunk.export(temp_chunk.name, format="wav")
+        temp_chunk_path = temp_chunk.name
 
     try:
-        # Transcribe audio
-        result = model.transcribe(temp_audio_path)
-        print(result)
+        result = model.transcribe(temp_chunk_path)
+        # print(f"Chunk {chunk_index + 1} transcribed: {result['text']}")
         return result["text"]
     except Exception as e:
-        print(f"Error during transcription: {str(e)}")
+        print(f"Error during chunk {chunk_index + 1} transcription: {str(e)}")
         return ""
     finally:
-        os.unlink(temp_audio_path)
+        os.unlink(temp_chunk_path)
 
 
-def process_audio_for_transcription(audio_content, use_chunks=True, chunk_length_ms=60000):
-    """Process audio for transcription, with option to use chunks or not."""
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:
-        temp_audio.write(audio_content)
-        temp_audio_path = temp_audio.name
-
+def process_audio_for_transcription(audio_content, max_workers=4):
+    """Process audio for transcription, dynamically splitting into chunks."""
     try:
-        if use_chunks:
-            sound = AudioSegment.from_wav(temp_audio_path)
-            chunks = [sound[i:i + chunk_length_ms]
-                      for i in range(0, len(sound), chunk_length_ms)]
+        sound = AudioSegment.from_wav(io.BytesIO(audio_content))
+        total_duration_ms = len(sound)
 
-            whole_text = ""
-            for i, audio_chunk in enumerate(chunks, start=1):
-                chunk_content = io.BytesIO()
-                audio_chunk.export(chunk_content, format="wav")
-                chunk_content.seek(0)
+        # Dynamically calculate chunk size based on audio length
+        # Aim for about 10 chunks, but no less than 30 seconds and no more than 5 minutes per chunk
+        chunk_length_ms = max(min(total_duration_ms // 10, 300000), 30000)
+        num_chunks = math.ceil(total_duration_ms / chunk_length_ms)
 
-                text = transcribe_audio_whisper(chunk_content.read())
-                if text:
-                    whole_text += f"{text.capitalize()}. "
-                print(f"Chunk {i}: {text}")  # Debug print
+        # Split into initial chunks
+        initial_chunks = [sound[i:i + chunk_length_ms]
+                          for i in range(0, total_duration_ms, chunk_length_ms)]
 
-            return whole_text
-        else:
-            # Process the entire audio file at once
-            return transcribe_audio_whisper(audio_content)
-    finally:
-        os.unlink(temp_audio_path)
+        # Merge small chunks with the previous one
+        merged_chunks = []
+        current_chunk = initial_chunks[0]
+        for next_chunk in initial_chunks[1:]:
+            if len(next_chunk) < 10000:  # If the next chunk is less than 10 seconds
+                current_chunk += next_chunk
+            else:
+                merged_chunks.append(current_chunk)
+                current_chunk = next_chunk
+        merged_chunks.append(current_chunk)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_chunk = {executor.submit(transcribe_audio_chunk, chunk, i): i
+                               for i, chunk in enumerate(merged_chunks)}
+
+            transcriptions = [""] * len(merged_chunks)
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                chunk_index = future_to_chunk[future]
+                try:
+                    text = future.result()
+                    transcriptions[chunk_index] = text.strip()
+                except Exception as e:
+                    print(
+                        f"Chunk {chunk_index + 1} generated an exception: {str(e)}")
+
+        full_transcription = " ".join(filter(None, transcriptions))
+        # print(f"Full transcription: {full_transcription}")
+        return full_transcription
+    except Exception as e:
+        print(f"Error processing audio: {str(e)}")
+        return ""
