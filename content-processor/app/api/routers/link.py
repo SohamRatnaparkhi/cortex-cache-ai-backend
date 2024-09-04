@@ -1,0 +1,21 @@
+from fastapi import APIRouter, HTTPException
+
+from app.schemas.videos import ProcessVideo
+from app.services import LinkService
+
+router = APIRouter(
+    prefix='/api/v1/link',
+    tags=["link"],
+    responses={404: {"description": "Not found"}},
+)
+
+
+@router.post("/process/git")
+async def process_link(request: ProcessVideo.ProcessVideoRequest) -> dict:
+    """Process  link, and transcribe."""
+    try:
+        transcription = LinkService.get_code_from_git_repo(
+            request.video_id)
+        return transcription
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
