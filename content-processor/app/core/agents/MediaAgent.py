@@ -1,6 +1,9 @@
+import io
 from abc import ABC, abstractmethod
 
-from app.schemas.videos import ProcessVideo
+import pytesseract
+from PIL import Image
+
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.s3 import S3Operations
@@ -14,7 +17,7 @@ class MediaAgent(ABC):
 
     
     @abstractmethod
-    async def process_media(self) -> str:
+    async def process_media(self) -> dict:
         pass
 
 
@@ -34,3 +37,11 @@ class AudioAgent(MediaAgent):
             audio_content=audio_bytes)
 
         return {"transcription": transcription}
+    
+class ImageAgent(MediaAgent):
+    def process_media(self):
+        image_bytes = s3Opr.download_object(object_key=self.s3_media_key)
+        image = Image.open(io.BytesIO(image_bytes))
+        transcript = pytesseract.image_to_string(image)
+
+        return {"transcription": transcript}
