@@ -5,6 +5,11 @@ def get_code_from_git_repo(repo_url: str) -> dict:
     git_agent = LinkAgents.GitAgent(repo_url)
     return git_agent.process_media()
 
+def get_youtube_video_transcript(video_url: str) -> dict:
+    youtube_agent = LinkAgents.YoutubeAgent(video_url)
+    print("Out from here 1")
+    return youtube_agent.process_media()
+
 
 # def clone_git_repo(repo_url: str) -> Union[bool, str]:
 #     try:

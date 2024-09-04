@@ -19,3 +19,14 @@ async def process_link(request: ProcessVideo.ProcessVideoRequest) -> dict:
         return transcription
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/process/youtube")
+async def process_link(request: ProcessVideo.ProcessVideoRequest) -> dict:
+    """Process  link, and transcribe."""
+    try:
+        transcription = LinkService.get_youtube_video_transcript(
+            request.video_id)
+        return transcription
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

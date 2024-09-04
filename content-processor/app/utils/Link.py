@@ -1,7 +1,10 @@
+import json
 import os
 from typing import Union
 
 from git import Repo
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.formatters import JSONFormatter
 
 from app.utils.File import get_every_file_content_in_folder
 
@@ -36,3 +39,23 @@ def extract_code_from_repo(repo_url: str) -> Union[bool, str]:
     # forcefully delete a directory
     os.system(f"rm -rf ./tmp")
     return True, content
+
+def extract_youtube_transcript(video_id: str) -> dict:
+    print("In")
+    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+    print("out")
+    # iterate over all available transcripts
+    tr = None
+    for transcript in transcript_list:
+        # print(transcript.fetch())
+        tr = transcript.fetch()
+        break
+
+    formatter = JSONFormatter()
+
+    # .format_transcript(transcript) turns the transcript into a JSON string.
+    json_formatted = formatter.format_transcript(tr)
+    transcript = ""
+    for group in json.loads(json_formatted):
+        transcript += group["text"] + " "
+    return transcript
