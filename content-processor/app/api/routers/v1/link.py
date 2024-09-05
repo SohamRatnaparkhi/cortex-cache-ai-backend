@@ -4,9 +4,8 @@ from app.schemas.videos import ProcessVideo
 from app.services import LinkService
 
 router = APIRouter(
-    prefix='/api/v1/link',
-    tags=["link"],
-    responses={404: {"description": "Not found"}},
+    prefix='/link',
+    responses={404: {"description": "Not found in link route"}},
 )
 
 

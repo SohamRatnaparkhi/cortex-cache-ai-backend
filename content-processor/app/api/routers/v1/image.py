@@ -4,9 +4,8 @@ from app.schemas.videos import ProcessVideo
 from app.services import ImageService
 
 router = APIRouter(
-    prefix='/api/v1/image',
-    tags=["image"],
-    responses={404: {"description": "Not found"}},
+    prefix='/image',
+    responses={404: {"description": "Not found in image route"}},
 )
 
 

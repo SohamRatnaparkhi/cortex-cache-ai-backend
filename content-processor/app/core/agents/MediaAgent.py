@@ -53,11 +53,10 @@ class File_PDFAgent(MediaAgent):
         pdf_file = io.BytesIO(pdf_bytes)
         pdf_reader = PdfReader(pdf_file)
         page_no = 1
-        page_end_delimiter = f"Page {page_no} ends"
         # Extract text from all pages
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text()
-            text += page_end_delimiter
+            text += "\n\n" + "*" * 50 + f"Page {page_no} ends" + "*" * 50 + "\n\n"
             page_no += 1
         return {"transcription": text}

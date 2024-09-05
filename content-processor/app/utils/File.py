@@ -38,7 +38,7 @@ def get_every_file_content_in_folder(folder_path: str) -> str:
     for root, dirs, files in os.walk(folder_path):
         # Remove excluded directories
         dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
-        file_end_delimiter = "\n\n*" * 50 + "EOF" + "*" * 50 + "\n\n*"
+        file_end_delimiter = "\n\n" + "*" * 50 + "EOF" + "*" * 50 + "\n\n"
         for file in files:
             file_extension = os.path.splitext(file)[1].lower()
             if file_extension not in EXCLUDED_EXTENSIONS:

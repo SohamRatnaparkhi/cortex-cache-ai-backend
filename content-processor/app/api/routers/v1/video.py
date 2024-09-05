@@ -5,8 +5,7 @@ from app.services import VideoService
 
 router = APIRouter(
     prefix='/api/v1/videos',
-    tags=["videos"],
-    responses={404: {"description": "Not found"}},
+    responses={404: {"description": "Not found in video route"}},
 )
 
 
