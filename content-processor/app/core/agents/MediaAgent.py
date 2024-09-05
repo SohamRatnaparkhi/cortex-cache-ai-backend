@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 
 import pytesseract
 from PIL import Image
+from PyPDF2 import PdfReader
 
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
@@ -45,3 +46,18 @@ class ImageAgent(MediaAgent):
         transcript = pytesseract.image_to_string(image)
 
         return {"transcription": transcript}
+
+class File_PDFAgent(MediaAgent):
+    def process_media(self):
+        pdf_bytes = s3Opr.download_object(object_key=self.s3_media_key)
+        pdf_file = io.BytesIO(pdf_bytes)
+        pdf_reader = PdfReader(pdf_file)
+        page_no = 1
+        page_end_delimiter = f"Page {page_no} ends"
+        # Extract text from all pages
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+            text += page_end_delimiter
+            page_no += 1
+        return {"transcription": text}
