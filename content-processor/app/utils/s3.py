@@ -36,8 +36,13 @@ class S3Operations():
         return object_keys
 
     def get_object(self, object_key: str, bucket_name=AWS_BUCKET_NAME) -> dict:
-        response = s3.get_object(Bucket=bucket_name, Key=object_key)
-        return response
+        try:
+            response = s3.get_object(Bucket=bucket_name, Key=object_key)
+            return response
+        except s3.exceptions.NoSuchKey:
+            raise ValueError(f"Object with key '{object_key}' not found in bucket '{bucket_name}'")
+        except Exception as e:
+            raise RuntimeError(f"Error retrieving object from S3: {str(e)}")
 
     def upload_object(self, object_key: str, file_path: str, bucket_name=AWS_BUCKET_NAME) -> None:
         s3.upload_file(file_path, bucket_name, object_key)

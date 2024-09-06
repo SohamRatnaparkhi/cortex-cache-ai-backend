@@ -56,6 +56,11 @@ def extract_youtube_transcript(video_id: str) -> dict:
     # .format_transcript(transcript) turns the transcript into a JSON string.
     json_formatted = formatter.format_transcript(tr)
     transcript = ""
+    # print(json_formatted)
     for group in json.loads(json_formatted):
-        transcript += group["text"] + " "
+        # if first char is capital add a full stop
+        if group["text"][0].isupper() and group["text"][0].isupper() is not 'I':
+            transcript += ". " + group["text"]
+        else:
+            transcript += " " + group["text"]
     return transcript

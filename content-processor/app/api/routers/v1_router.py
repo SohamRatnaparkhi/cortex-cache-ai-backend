@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routers.v1 import audio, files, image, link
+from app.api.routers.v1 import audio, files, image, link, video
 
 router = APIRouter(
     prefix='/v1',
@@ -11,4 +11,5 @@ router.include_router(files.router)
 router.include_router(link.router)
 router.include_router(audio.router)
 router.include_router(image.router)
+router.include_router(video.router)
     
