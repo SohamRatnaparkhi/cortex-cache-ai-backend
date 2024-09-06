@@ -18,14 +18,14 @@ def clone_git_repo(repo_url: str) -> Union[bool, str]:
         if os.path.exists(path):
             os.system(f"rm -rf {path}")
         # create a folder at the path if it doesn't exist
-        print("Making dir")
+        # print("Making dir")
         os.makedirs(path, exist_ok=True)
-        print("Clone started")
+        # print("Clone started")
         Repo.clone_from(repo_url, path)
-        print(f"clone over at {path}")
+        # print(f"clone over at {path}")
         return True, path
     except Exception as e:
-        print(f"Error cloning {repo_url}: {str(e)}")
+        # print(f"Error cloning {repo_url}: {str(e)}")
         return False, f"Error cloning {repo_url}: {str(e)}"
 
 
@@ -35,19 +35,19 @@ def extract_code_from_repo(repo_url: str) -> Union[bool, str]:
     if not success:
         return success, path
     print("clone over")
-    content = get_every_file_content_in_folder(path)
+    content = get_every_file_content_in_folder(path, is_code=True)
     # forcefully delete a directory
     os.system(f"rm -rf ./tmp")
     return True, content
 
 def extract_youtube_transcript(video_id: str) -> dict:
-    print("In")
+    # print("In")
     transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-    print("out")
+    # print("out")
     # iterate over all available transcripts
     tr = None
     for transcript in transcript_list:
-        # print(transcript.fetch())
+        print(transcript.fetch())
         tr = transcript.fetch()
         break
 
@@ -57,5 +57,9 @@ def extract_youtube_transcript(video_id: str) -> dict:
     json_formatted = formatter.format_transcript(tr)
     transcript = ""
     for group in json.loads(json_formatted):
-        transcript += group["text"] + " "
+        # if first char is capital add a full stop
+        if group["text"][0].isupper() and (len(group["text"][0]) == 1 and group["text"][0].isupper()) != 'I':
+            transcript += ". " + group["text"]
+        else:
+            transcript += " " + group["text"]
     return transcript

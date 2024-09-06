@@ -4,9 +4,8 @@ from app.schemas.videos import ProcessVideo
 from app.services import AudioService
 
 router = APIRouter(
-    prefix='/api/v1/audio',
-    tags=["audio"],
-    responses={404: {"description": "Not found"}},
+    prefix='/audio',
+    responses={404: {"description": "Not found in audio"}},
 )
 
 

@@ -1,10 +1,23 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
-from .api.routers import audio, files, image, link, video
+from .api import router
+from .prisma import prisma
 
 app = FastAPI()
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+
+@app.on_event("startup")
+async def startup():
+    await prisma.prisma.connect()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await prisma.prisma.disconnect()
 origins = [
     "http://localhost",
     "https://localhost:3000",
@@ -19,12 +32,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(video.router)
-app.include_router(audio.router)
-app.include_router(image.router)
-app.include_router(link.router)
-app.include_router(files.router)
+app.include_router(router=router.router)
+
 
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+@app.middleware("http")
+async def global_exception_handler(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"An unexpected error occurred: {str(e)}"}
+        )
