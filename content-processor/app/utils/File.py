@@ -94,7 +94,7 @@ def get_every_file_content_in_folder(folder_path: str, is_code: bool) -> str:
                         chunks.append(chunk_text(file_content, 1000))
     print("Reading done")
     # print(chunks)
-    [write_file(" ".join(chunk)) for chunk in chunks]
+    # [write_file(" ".join(chunk)) for chunk in chunks]
     return {
         "content": all_contents,
         "chunks": chunks,
