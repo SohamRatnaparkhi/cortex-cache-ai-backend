@@ -2,13 +2,12 @@ import io
 from abc import ABC, abstractmethod
 
 import pytesseract
-from PIL import Image
-from PyPDF2 import PdfReader
-
 from app.core.jina_ai import use_jina
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.s3 import S3Operations
+from PIL import Image
+from PyPDF2 import PdfReader
 
 s3Opr = S3Operations()
 
@@ -30,7 +29,9 @@ class VideoAgent(MediaAgent):
             audio_content = extract_audio_from_video(video_bytes)
             transcription = process_audio_for_transcription(audio_content=audio_content)
             chunks = use_jina.segment_data(transcription)
-            return {"transcription": transcription, "chunks": chunks['chunks']}
+            if "chunks" in chunks.keys():
+                return {"transcription": transcription, "chunks": chunks['chunks']}
+            return {"chunks": chunks, "transcription": transcription}
         except Exception as e:
             raise RuntimeError(f"Error processing video: {str(e)}")
 
