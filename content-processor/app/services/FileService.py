@@ -1,6 +1,8 @@
 from app.core.agents.MediaAgent import File_PDFAgent
+from app.schemas.Common import AgentResponse
+from app.schemas.Metadata import MediaSpecificMd, Metadata
 
 
-def extract_text_from_pdf(s3_url: str) -> str:
-    agent = File_PDFAgent(s3_url)
+def extract_text_from_pdf(s3_url: str, metadata: Metadata[MediaSpecificMd]) -> AgentResponse:
+    agent = File_PDFAgent(s3_url, metadata)
     return agent.process_media()

@@ -69,7 +69,7 @@ def process_audio_for_transcription(audio_content, max_workers=4):
         merged_chunks = []
         current_chunk = initial_chunks[0]
         for next_chunk in initial_chunks[1:]:
-            if len(next_chunk) < 10000:  # If the next chunk is less than 10 seconds
+            if len(next_chunk) < 300000:  # If the next chunk is less than 10 seconds
                 current_chunk += next_chunk
             else:
                 merged_chunks.append(current_chunk)
