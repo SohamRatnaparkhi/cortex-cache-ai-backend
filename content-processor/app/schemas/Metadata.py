@@ -1,13 +1,14 @@
-from typing import Optional, Union
+from typing import Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
+# Specific metadata models for different content types
 
 class YouTubeSpecificMd(BaseModel):
     video_id: str
-    chunk_id: str
     channel_name: str
     author_name: str
+    chunk_id: str
 
 class GitSpecificMd(BaseModel):
     repo_name: str
@@ -17,14 +18,10 @@ class GitSpecificMd(BaseModel):
     chunk_type: str
     chunk_id: str
 
-
-
 class MediaSpecificMd(BaseModel):
     duration: float
     speaker: Optional[str] = None
     chunk_id: str
-
-
 
 class ImageSpecificMd(BaseModel):
     width: int
@@ -32,14 +29,11 @@ class ImageSpecificMd(BaseModel):
     format: str
     chunk_id: str
 
-
 class TextSpecificMd(BaseModel):
     word_count: int
     reading_time: float  # in minutes
     tags: list[str]
     chunk_id: str
-
-
 
 class MindMapSpecificMd(BaseModel):
     memory_count: int
@@ -47,8 +41,10 @@ class MindMapSpecificMd(BaseModel):
     subtopics: list[str]
     chunk_id: str
 
+T = TypeVar('T')
 
-class Metadata(BaseModel):
+# Main Metadata model that includes common fields and specific metadata
+class Metadata(BaseModel, Generic[T]):
     user_id: str
     mem_id: str
     title: str
@@ -60,7 +56,7 @@ class Metadata(BaseModel):
     language: str
     type: str
     content_hash: Optional[str] = None
-    specific_desc: Union[YouTubeSpecificMd, GitSpecificMd, MediaSpecificMd, ImageSpecificMd, TextSpecificMd, MindMapSpecificMd, None]
+    specific_desc: T
     ai_summary: Optional[str] = None
     ai_insights: Optional[str] = None
     related_memories: Optional[list[str]] = None

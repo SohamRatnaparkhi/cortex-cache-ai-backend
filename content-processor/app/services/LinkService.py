@@ -1,20 +1,55 @@
 from app.core.agents import LinkAgents
-from app.schemas.Common import AgentResponseWrapper
-from app.schemas.Metadata import Metadata
+from app.schemas.Common import AgentResponse
+from app.schemas.Metadata import GitSpecificMd, Metadata, YouTubeSpecificMd
 
 
-def get_code_from_git_repo(repo_url: str) -> dict:
-    git_agent = LinkAgents.GitAgent(repo_url)
+def get_code_from_git_repo(repo_url: str, md: Metadata[GitSpecificMd]) -> AgentResponse:
+    """
+    Retrieve and process code from a Git repository.
+
+    This function creates a GitAgent to fetch and process the contents of a Git repository.
+
+    Args:
+        repo_url (str): The URL of the Git repository to process.
+        md (Metadata[GitSpecificMd]): Metadata specific to Git repositories.
+
+    Returns:
+        AgentResponse: The processed media content from the Git repository.
+
+    Raises:
+        ValueError: If code extraction from the repository fails.
+        RuntimeError: If there's an error processing the Git repository.
+
+    Example:
+        repo_url = "https://github.com/username/repo.git"
+        git_md = Metadata[GitSpecificMd](...)
+        result = get_code_from_git_repo(repo_url, git_md)
+    """
+    git_agent = LinkAgents.GitAgent(repo_url, md)
     return git_agent.process_media()
 
-def get_youtube_video_transcript(video_url: str, md: Metadata) -> AgentResponseWrapper:
-    resource_link = video_url
+def get_youtube_video_transcript(video_url: str, md: Metadata[YouTubeSpecificMd]) -> AgentResponse:
+    """
+    Retrieve and process the transcript of a YouTube video.
 
-    youtube_agent = LinkAgents.YoutubeAgent(
-        resource_link=resource_link,
-        md=md
-    )
-    # youtube_agent = LinkAgents.YoutubeAgent(video_url)
+    This function creates a YoutubeAgent to fetch and process the transcript of a YouTube video.
 
-    print("Out from here 1")
+    Args:
+        video_url (str): The URL of the YouTube video to process.
+        md (Metadata[YouTubeSpecificMd]): Metadata specific to YouTube videos.
+
+    Returns:
+        AgentResponse: The processed transcript of the YouTube video, including chunks,
+                       metadata, and full transcript.
+
+    Raises:
+        ValueError: If the transcript extraction fails.
+        Exception: If there's any error during the processing of the YouTube video.
+
+    Example:
+        video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        youtube_md = Metadata[YouTubeSpecificMd](...)
+        result = get_youtube_video_transcript(video_url, youtube_md)
+    """
+    youtube_agent = LinkAgents.YoutubeAgent(resource_link=video_url, md=md)
     return youtube_agent.process_media()

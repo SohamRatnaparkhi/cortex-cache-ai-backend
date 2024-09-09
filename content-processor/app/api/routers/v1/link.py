@@ -12,12 +12,15 @@ router = APIRouter(
 
 
 @router.post("/process/git")
-async def process_git_link(request: Link.GitLinkRequest) -> dict:
+async def process_git_link(request: Link.GitLinkRequest) -> AgentResponseWrapper:
     """Process  link, and transcribe."""
     try:
         transcription = LinkService.get_code_from_git_repo(
-            request.repo_url)
-        return transcription
+            request.repo_url, request.metadata)
+        print("Got transcription")
+        return AgentResponseWrapper(
+            response=transcription
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
