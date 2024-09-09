@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.videos import ProcessVideo
+from app.schemas.Common import AgentResponseWrapper
+from app.schemas.Media import FileRequest
 from app.services import FileService
 
 router = APIRouter(
@@ -10,10 +11,12 @@ router = APIRouter(
 
 
 @router.post("/process/pdf")
-async def process_pdf(request: ProcessVideo.ProcessVideoRequest) -> dict:
+async def process_pdf(request: FileRequest) -> AgentResponseWrapper:
     """Process  pdf, and transcribe."""
     try:
-        transcription = FileService.extract_text_from_pdf(request.video_id)
-        return transcription
+        transcription = FileService.extract_text_from_pdf(request.file_id, request.metadata)
+        return AgentResponseWrapper(
+            response=transcription
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

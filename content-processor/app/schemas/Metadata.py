@@ -19,8 +19,7 @@ class GitSpecificMd(BaseModel):
     chunk_id: str
 
 class MediaSpecificMd(BaseModel):
-    duration: float
-    speaker: Optional[str] = None
+    type: str
     chunk_id: str
 
 class ImageSpecificMd(BaseModel):

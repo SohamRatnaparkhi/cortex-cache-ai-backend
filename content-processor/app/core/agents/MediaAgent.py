@@ -1,61 +1,115 @@
 import io
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
 
 import pytesseract
-from app.core.jina_ai import use_jina
-from app.utils.AV import (extract_audio_from_video,
-                          process_audio_for_transcription)
-from app.utils.s3 import S3Operations
 from PIL import Image
 from PyPDF2 import PdfReader
 
+from app.core.jina_ai import use_jina
+from app.schemas.Common import AgentResponse
+from app.schemas.Metadata import ImageSpecificMd, MediaSpecificMd, Metadata
+from app.utils.AV import (extract_audio_from_video,
+                          process_audio_for_transcription)
+from app.utils.s3 import S3Operations
+
 s3Opr = S3Operations()
 
+T = TypeVar('T', MediaSpecificMd, ImageSpecificMd)
 
-class MediaAgent(ABC):
-    def __init__(self, s3_media_key) -> None:
+
+class MediaAgent(ABC, Generic[T]):
+    def __init__(self, s3_media_key, md: Metadata[T]) -> None:
         super().__init__()
         self.s3_media_key = s3_media_key
+        self.md = md
 
     @abstractmethod
-    async def process_media(self) -> dict:
+    async def process_media(self) -> AgentResponse:
         pass
 
 
 class VideoAgent(MediaAgent):
-    def process_media(self):
+    def process_media(self) -> AgentResponse:
         try:
             video_bytes = s3Opr.download_object(object_key=self.s3_media_key)
             audio_content = extract_audio_from_video(video_bytes)
             transcription = process_audio_for_transcription(audio_content=audio_content)
             chunks = use_jina.segment_data(transcription)
-            if "chunks" in chunks.keys():
-                return {"transcription": transcription, "chunks": chunks['chunks']}
-            return {"chunks": chunks, "transcription": transcription}
+            metadata = []
+            chunk_id = 0
+            for _ in chunks['chunks']:
+                md_copy = self.md.model_copy()
+                md_v = MediaSpecificMd(
+                    chunk_id=f"{chunk_id}",
+                    type='video',
+                )
+                md_copy.specific_desc = md_v
+                metadata.append(md_copy)
+                chunk_id += 1
+            response = AgentResponse(
+                transcript=transcription,
+                chunks=chunks['chunks'],
+                metadata=metadata
+            )
+            return response
         except Exception as e:
             raise RuntimeError(f"Error processing video: {str(e)}")
 
 
 class AudioAgent(MediaAgent):
-    def process_media(self):
+    def process_media(self) -> AgentResponse:
         audio_bytes = s3Opr.download_object(object_key=self.s3_media_key)
         transcription = process_audio_for_transcription(
             audio_content=audio_bytes)
         chunks = use_jina.segment_data(transcription)
-        return {"transcription": transcription, "chunks": chunks['chunks']}
+        metadata = []
+        chunk_id = 0
+        for chunk in chunks['chunks']:
+            md_copy = self.md.model_copy()
+            md_v = MediaSpecificMd(
+                chunk_id=f"{chunk_id}",
+                type='video',
+            )   
+            md_copy.specific_desc = md_v
+            metadata.append(md_copy)
+            chunk_id += 1
+        response = AgentResponse(
+            transcript=transcription,
+            chunks=chunks['chunks'],
+            metadata=metadata
+        )
+        return response
 
 
 class ImageAgent(MediaAgent):
-    def process_media(self):
+    def process_media(self) -> AgentResponse:
         image_bytes = s3Opr.download_object(object_key=self.s3_media_key)
         image = Image.open(io.BytesIO(image_bytes))
         transcript = pytesseract.image_to_string(image)
         chunks = use_jina.segment_data(transcript)
-        return {"transcription": transcript, "chunks": chunks['chunks']}
+        metadata = []
+        chunk_id = 0
+        for chunk in chunks['chunks']:
+            md_copy = self.md.model_copy()
+            md_v = MediaSpecificMd(
+                chunk_id=f"{chunk_id}",
+                type='image',
+            )
+            md_copy.specific_desc = md_v
+            metadata.append(md_copy)
+            chunk_id += 1
+        response = AgentResponse(
+            transcript=transcript,
+            chunks=chunks['chunks'],
+            metadata=metadata
+        )
+        return response 
+
 
 
 class File_PDFAgent(MediaAgent):
-    def process_media(self):
+    def process_media(self) -> AgentResponse:
         pdf_bytes = s3Opr.download_object(object_key=self.s3_media_key)
         pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
         
@@ -80,5 +134,22 @@ class File_PDFAgent(MediaAgent):
 
         full_text = '\n\n'.join(f"{page_content}\n\n{'*' * 50}Page {i} ends{'*' * 50}"
                                 for i, page_content in enumerate(text, 1))
-
-        return {"transcription": full_text, "chunks": chunks}
+    
+        metadata = []
+        chunk_id = 0
+        for _ in chunks:
+            md_copy = self.md.model_copy()
+            md_v = MediaSpecificMd(
+                chunk_id=f"{chunk_id}",
+                type='pdf',
+            )
+            md_copy.specific_desc = md_v
+            metadata.append(md_copy)
+            chunk_id += 1
+        print(metadata[0])
+        response = AgentResponse(
+            transcript=full_text,
+            chunks=chunks,
+            metadata=metadata
+        )
+        return response
