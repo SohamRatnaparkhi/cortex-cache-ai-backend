@@ -82,7 +82,7 @@ def extract_youtube_transcript(video_id: str) -> str:
         transcript += " " + text
     return transcript.strip()
 
-def extract_transcript_from_youtube(video_url: str) -> Union[str, str, str]:
+def extract_transcript_from_youtube(video_url: str, language: str = 'english') -> Union[str, str, str]:
     """
     Extract transcript, title, and description from a YouTube video.
 
@@ -106,7 +106,7 @@ def extract_transcript_from_youtube(video_url: str) -> Union[str, str, str]:
         with open(video_file, 'rb') as f:
             video_bytes = f.read()
         audio_content = extract_audio_from_video(video_bytes)
-        transcript = process_audio_for_transcription(audio_content=audio_content)
+        transcript = process_audio_for_transcription(audio_content=audio_content, language=language)
 
         os.remove(video_file)
 

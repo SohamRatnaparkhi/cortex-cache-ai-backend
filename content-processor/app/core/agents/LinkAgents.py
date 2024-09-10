@@ -116,7 +116,7 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             if '?' in video_id:
                 video_id = video_id.split('?')[0]
 
-            transcript, video_title, video_desc = extract_transcript_from_youtube(video_url)
+            transcript, video_title, video_desc = extract_transcript_from_youtube(video_url, language=self.md.language)
             self.md.title = video_title
             self.md.description = video_desc
             if not transcript:

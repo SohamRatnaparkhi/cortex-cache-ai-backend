@@ -34,7 +34,7 @@ class VideoAgent(MediaAgent):
         try:
             video_bytes = s3Opr.download_object(object_key=self.s3_media_key)
             audio_content = extract_audio_from_video(video_bytes)
-            transcription = process_audio_for_transcription(audio_content=audio_content)
+            transcription = process_audio_for_transcription(audio_content=audio_content, language=self.md.language)
             chunks = use_jina.segment_data(transcription)
             metadata = []
             chunk_id = 0
