@@ -29,16 +29,16 @@ class LinkAgent(ABC, Generic[T]):
         super().__init__()
         self.resource_link = resource_link
         self.md = md
-        self.user_id = md.user_id
-        self.mem_id = md.mem_id
-        self.title = md.title
-        self.created_at = md.created_at
-        self.last_updated = md.last_updated
-        self.tags = md.tags
-        self.source = md.source
-        self.language = md.language
-        self.type = md.type
-        self.description = md.description
+        # self.user_id = md.user_id
+        # self.mem_id = md.mem_id
+        # self.title = md.title
+        # self.created_at = md.created_at
+        # self.last_updated = md.last_updated
+        # self.tags = md.tags
+        # self.source = md.source
+        # self.language = md.language
+        # self.type = md.type
+        # self.description = md.description
 
     @abstractmethod
     def process_media(self) -> AgentResponse:
