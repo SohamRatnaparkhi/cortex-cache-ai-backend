@@ -3,15 +3,14 @@ from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
 import pytesseract
-from PIL import Image
-from PyPDF2 import PdfReader
-
 from app.core.jina_ai import use_jina
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import ImageSpecificMd, MediaSpecificMd, Metadata
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.s3 import S3Operations
+from PIL import Image
+from PyPDF2 import PdfReader
 
 s3Opr = S3Operations()
 
@@ -125,7 +124,9 @@ class File_PDFAgent(MediaAgent):
             
             if page_no % combine_pages == 0:
                 chunk = use_jina.segment_data(''.join(chunking_data))
-                chunks.extend(chunk['chunks'])
+                # print(chunk)
+                if chunk['chunks']:
+                    chunks.extend(chunk['chunks'])
                 chunking_data.clear()
 
         if chunking_data:
@@ -146,7 +147,6 @@ class File_PDFAgent(MediaAgent):
             md_copy.specific_desc = md_v
             metadata.append(md_copy)
             chunk_id += 1
-        print(metadata[0])
         response = AgentResponse(
             transcript=full_text,
             chunks=chunks,

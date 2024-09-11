@@ -26,7 +26,6 @@ import json
 import logging
 
 from aiokafka import AIOKafkaConsumer
-
 from app.core.agents.LinkAgents import GitAgent, YoutubeAgent
 from app.schemas.Metadata import GitSpecificMd, Metadata, YouTubeSpecificMd
 
@@ -40,7 +39,7 @@ async def kafka_consumer_task(group_id: str):
     while True:
         try:
             consumer = AIOKafkaConsumer(
-                'code', 'media', 'text',
+                'high-priority-queue', 'low-priority-queue', 'failed-queue',
                 bootstrap_servers='localhost:9092',
                 group_id=group_id,
                 session_timeout_ms=30000,

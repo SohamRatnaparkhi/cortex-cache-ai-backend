@@ -4,12 +4,11 @@ import logging
 from contextlib import asynccontextmanager
 
 from aiokafka import AIOKafkaConsumer
+from app.utils.Kafka import kafka_consumer_task
 from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from kafka import KafkaConsumer
-
-from app.utils.Kafka import kafka_consumer_task
 
 from .api import router
 from .prisma import prisma
@@ -20,9 +19,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     await prisma.prisma.connect()
     # consume_messages()
-    for group_id in ["soham1"]:
-        await start_consumer(group_id)
-    logger.info("Kafka consumers started")
+    # for group_id in ["soham1"]:
+        # await start_consumer(group_id)
+    # logger.info("Kafka consumers started")
     yield
     await prisma.prisma.disconnect()
 

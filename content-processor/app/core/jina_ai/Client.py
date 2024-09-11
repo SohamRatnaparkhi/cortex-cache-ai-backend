@@ -15,10 +15,12 @@ while start <= int(total_keys):
     all_api_keys.append(os.getenv(f"JINA_API_KEY_{start}"))
     start += 1
 
-
 def randomly_choose_one_key_with_equal_prob():
     # print(all_api_keys)
-    return random.choice(all_api_keys)
+    key =  random.choice(all_api_keys)
+    if key is None:
+        key = os.getenv("JINA_API_KEY_1")
+    return key
 
 
 class JinaAIClient():
