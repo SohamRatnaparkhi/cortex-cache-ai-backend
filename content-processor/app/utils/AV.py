@@ -10,6 +10,7 @@ import whisper
 from fastapi import APIRouter, HTTPException
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
+from whisper.tokenizer import TO_LANGUAGE_CODE
 
 r = sr.Recognizer()
 
@@ -31,7 +32,7 @@ def extract_audio_from_video(video_bytes):
         os.unlink(temp_video_path)
 
 
-def transcribe_audio_chunk(chunk, chunk_index):
+def transcribe_audio_chunk(chunk, chunk_index, lang = "en"):
     """Transcribe a single audio chunk using Whisper."""
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_chunk:
         chunk = chunk.set_frame_rate(16000).set_channels(
@@ -40,7 +41,7 @@ def transcribe_audio_chunk(chunk, chunk_index):
         temp_chunk_path = temp_chunk.name
 
     try:
-        result = model.transcribe(temp_chunk_path)
+        result = model.transcribe(temp_chunk_path, language=lang)
         # print(f"Chunk {chunk_index + 1} transcribed: {result['text']}")
         return result["text"]
     except Exception as e:
@@ -50,7 +51,7 @@ def transcribe_audio_chunk(chunk, chunk_index):
         os.unlink(temp_chunk_path)
 
 
-def process_audio_for_transcription(audio_content, max_workers=4):
+def process_audio_for_transcription(audio_content, max_workers=4, language="english"):
     """Process audio for transcription, dynamically splitting into chunks."""
     try:
         sound = AudioSegment.from_wav(io.BytesIO(audio_content))
@@ -77,7 +78,8 @@ def process_audio_for_transcription(audio_content, max_workers=4):
         merged_chunks.append(current_chunk)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_chunk = {executor.submit(transcribe_audio_chunk, chunk, i): i
+            language_code = TO_LANGUAGE_CODE.get(language, "en")
+            future_to_chunk = {executor.submit(transcribe_audio_chunk, chunk, i, language_code): i
                                for i, chunk in enumerate(merged_chunks)}
 
             transcriptions = [""] * len(merged_chunks)

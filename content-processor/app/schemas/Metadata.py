@@ -1,4 +1,4 @@
-from typing import Generic, Optional, TypeVar, Union
+from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -52,7 +52,7 @@ class Metadata(BaseModel, Generic[T]):
     last_updated: str
     tags: list[str]
     source: str
-    language: str
+    language: str = "english"
     type: str
     content_hash: Optional[str] = None
     specific_desc: T

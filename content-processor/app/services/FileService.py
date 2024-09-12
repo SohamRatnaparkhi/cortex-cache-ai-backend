@@ -3,6 +3,6 @@ from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import MediaSpecificMd, Metadata
 
 
-def extract_text_from_pdf(s3_url: str, metadata: Metadata[MediaSpecificMd]) -> AgentResponse:
+async def extract_text_from_pdf(s3_url: str, metadata: Metadata[MediaSpecificMd]) -> AgentResponse:
     agent = File_PDFAgent(s3_url, metadata)
-    return agent.process_media()
+    return await agent.process_media()

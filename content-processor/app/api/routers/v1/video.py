@@ -15,7 +15,7 @@ router = APIRouter(
 async def process_video(request: VideoRequest) -> AgentResponseWrapper:
     """Process video, extract audio, and transcribe."""
     try:
-        transcription = VideoService.get_video_transcript(request.video_id, request.metadata)
+        transcription = await VideoService.get_video_transcript(request.video_id, request.metadata)
         return AgentResponseWrapper(
             response=transcription
         )

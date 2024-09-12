@@ -82,7 +82,7 @@ def extract_youtube_transcript(video_id: str) -> str:
         transcript += " " + text
     return transcript.strip()
 
-def extract_transcript_from_youtube(video_url: str) -> Union[str, str, str]:
+def extract_transcript_from_youtube(video_url: str, language: str = 'english') -> Union[str, str, str]:
     """
     Extract transcript, title, and description from a YouTube video.
 
@@ -93,20 +93,21 @@ def extract_transcript_from_youtube(video_url: str) -> Union[str, str, str]:
         Union[str, str, str]: A tuple containing the transcript, video title, and video description.
         If an error occurs, returns a dictionary with an 'error' key.
     """
-    SAVE_PATH = "./tmp"
+    crnt_path = os.getcwd()
+    SAVE_PATH = f"{crnt_path}/tmp"
     try:
         yt = YouTube(video_url)
         video_title = yt.title
         video_description = yt.description
 
         ys = yt.streams.get_lowest_resolution()
-        ys.download(output_path=SAVE_PATH)
-        video_file = os.path.join(SAVE_PATH, yt.title + ".mp4")
-
-        with open(video_file, 'rb') as f:
+        output_path = ys.download(output_path=SAVE_PATH)
+        # video_file = os.path.join(SAVE_PATH, yt.title.replace(" ", "_") + ".mp4")
+        video_file = output_path
+        with open(output_path, 'rb') as f:
             video_bytes = f.read()
         audio_content = extract_audio_from_video(video_bytes)
-        transcript = process_audio_for_transcription(audio_content=audio_content)
+        transcript = process_audio_for_transcription(audio_content=audio_content, language=language)
 
         os.remove(video_file)
 
@@ -115,4 +116,6 @@ def extract_transcript_from_youtube(video_url: str) -> Union[str, str, str]:
 
         return transcript, video_title, video_description
     except Exception as e:
+        print(e)
         return {"error": str(e)}
+
