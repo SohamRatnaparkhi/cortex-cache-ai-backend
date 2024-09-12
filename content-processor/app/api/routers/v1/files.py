@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException
-
 from app.schemas.Common import AgentResponseWrapper
 from app.schemas.Media import FileRequest
 from app.services import FileService
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter(
     prefix='/file',
@@ -14,7 +13,7 @@ router = APIRouter(
 async def process_pdf(request: FileRequest) -> AgentResponseWrapper:
     """Process  pdf, and transcribe."""
     try:
-        transcription = FileService.extract_text_from_pdf(request.file_id, request.metadata)
+        transcription = await FileService.extract_text_from_pdf(request.file_id, request.metadata)
         return AgentResponseWrapper(
             response=transcription
         )

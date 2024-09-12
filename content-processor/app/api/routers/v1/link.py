@@ -14,7 +14,7 @@ router = APIRouter(
 async def process_git_link(request: Link.GitLinkRequest) -> AgentResponseWrapper:
     """Process  link, and transcribe."""
     try:
-        transcription = LinkService.get_code_from_git_repo(
+        transcription = await LinkService.get_code_from_git_repo(
             request.repo_url, request.metadata)
         return AgentResponseWrapper(
             response=transcription
@@ -30,7 +30,7 @@ async def process_git_link(request: Link.GitLinkRequest) -> AgentResponseWrapper
 async def process_youtube_link(request: Link.YoutubeLinkRequest) -> AgentResponseWrapper:
     """Process  link, and transcribe."""
     try:
-        transcription = LinkService.get_youtube_video_transcript(
+        transcription = await LinkService.get_youtube_video_transcript(
             request.video_url, request.metadata)
         return AgentResponseWrapper(
             response=transcription
