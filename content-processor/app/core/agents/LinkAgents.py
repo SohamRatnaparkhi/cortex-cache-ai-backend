@@ -1,4 +1,5 @@
 import os
+import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Generic, List, TypeVar
 
@@ -10,7 +11,8 @@ from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GitSpecificMd, Metadata, YouTubeSpecificMd
-from app.services.MemoryService import insert_memory_to_db
+from app.services.MemoryService import (insert_many_memories_to_db,
+                                        insert_memory_to_db)
 from app.utils.Link import (extract_code_from_repo,
                             extract_transcript_from_youtube)
 from app.utils.Vectors import get_vectors
@@ -43,7 +45,7 @@ class LinkAgent(ABC, Generic[T]):
         """
         pass
 
-    async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]) -> List[str]:
+    async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
             embeddings = use_jina.get_embedding(chunks)
             embeddings = [e["embedding"] for e in embeddings["data"]]
@@ -56,8 +58,7 @@ class LinkAgent(ABC, Generic[T]):
             pinecone_client = PineconeClient()
             pinecone_client.upsert_batch(vectors, batch_size)
 
-            chunk_ids = [vector['id'] for vector in vectors]
-            return chunk_ids
+            return 
         except Exception as e:
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")
 
@@ -69,10 +70,17 @@ class GitAgent(LinkAgent[GitSpecificMd]):
 
     async def process_media(self) -> AgentResponse:
         """
-        Process a Git repository and extract its code into chunks with metadata.
+        Process a Git repository, extract its code, and segment it into chunks with metadata.
+
+        This method performs the following steps:
+        1. Extracts code from the repository.
+        2. Segments the code into chunks.
+        3. Creates metadata for each chunk.
+        4. Stores the chunks as memories in the database.
+        5. Embeds and stores the chunks in the vector database.
 
         Returns:
-            AgentResponse: An object containing the extracted code chunks, metadata, and full content.
+            AgentResponse: An object containing the segmented chunks, metadata, and full content.
 
         Raises:
             ValueError: If code extraction from the repository fails.
@@ -86,53 +94,50 @@ class GitAgent(LinkAgent[GitSpecificMd]):
             meta_chunks = code.metadata
             content = code.transcript
 
-            memory = await self.store_memory_in_database(content)
-            memory_id = memory['id']
-            self.md.mem_id = memory_id
+            mem_id = str(uuid.uuid4())
+            self.md.mem_id = mem_id
 
-            # add memory id to chunks' metadata
+            # Add memory id to chunks' metadata
             for meta in meta_chunks:
-                meta.mem_id = memory_id
+                meta.mem_id = mem_id
 
-            chunk_ids = await self.embed_and_store_chunks(chunks, meta_chunks)
+            await self.store_memory_in_database(chunks, meta_chunks, mem_id)
+            await self.embed_and_store_chunks(chunks, meta_chunks)
 
             return AgentResponse(
                 chunks=chunks,
                 metadata=meta_chunks,
                 transcript=content,
-                chunk_ids=chunk_ids
             )
         except ValueError as ve:
             raise ve
         except Exception as e:
             raise RuntimeError(f"Error processing Git repository: {str(e)}")
 
-    async def store_memory_in_database(self, data) -> dict:
+    async def store_memory_in_database(self, chunks: List[str], meta_chunks: List[GitSpecificMd], mem_id: str) -> None:
         try:
-            memory_data = {
-                "title": self.md.title,
-                "memData": data,
-                "chunkIds": [],
-                "memType": 'git',
-                "source": self.md.source,
-                "tags": self.md.tags,
-                "metadata": self.md.specific_desc.json(),
-            }
-            memory = await insert_memory_to_db(memory_data)
-            return {
-                "id": str(memory.id),
-                "title": memory.title,
-                "memData": memory.memData,
-                "chunkIds": memory.chunkIds,
-                "memType": memory.memType,
-                "source": memory.source,
-                "tags": memory.tags,
-                "metadata": memory.metadata,
-                "createdAt": memory.createdAt.isoformat() if memory.createdAt else None,
-                "updatedAt": memory.updatedAt.isoformat() if memory.updatedAt else None
-            }
+            memories = []
+            for i, (chunk, meta) in enumerate(zip(chunks, meta_chunks)):
+                mem_data = {
+                    "memId": mem_id,
+                    "chunkId": f"{mem_id}_{i}",
+                    "title": self.md.title,
+                    "memData": chunk,
+                    "memType": 'git',
+                    "source": self.md.source,
+                    "tags": self.md.tags,
+                    "metadata": meta.json(),
+                }
+                memories.append(mem_data)
+
+            # Store memory in database using batches
+            batch_size = 100
+            for i in range(0, len(memories), batch_size):
+                batch = memories[i:i + batch_size]
+                await insert_many_memories_to_db(batch)
+
         except Exception as e:
-            raise RuntimeError(f"Error storing git memory in database: {str(e)}")
+            raise RuntimeError(f"Error storing Git memory in database: {str(e)}")
 
 
 class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
@@ -166,10 +171,9 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 video_id = video_id.split('?')[0]
             transcript, video_title, video_desc = extract_transcript_from_youtube(video_url, language=self.md.language)
             
-            memory = await self.store_memory_in_database(transcript)
-            memory_id = memory['id']
+            mem_id = str(uuid.uuid4())
 
-            self.md.mem_id = memory_id
+            self.md.mem_id = mem_id
             self.md.title = video_title
             self.md.description = video_desc
             if not transcript:
@@ -192,7 +196,7 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             for i in range(len(chunks)):
                 ymd = YouTubeSpecificMd(
                     video_id=video_id,
-                    chunk_id=f'{i}',
+                    chunk_id=f'{mem_id}_{i}',
                     channel_name=channel_name,
                     author_name=author,
                 )
@@ -201,40 +205,63 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 meta_chunks.append(md_copy)
 
 
-            chunk_ids = await self.embed_and_store_chunks(chunks, meta_chunks)
+            await self.store_memory_in_database(chunks, meta_chunks, mem_id)
+
+            await self.embed_and_store_chunks(chunks, meta_chunks)
 
             return AgentResponse(
+                transcript=transcript,
                 chunks=chunks,
                 metadata=meta_chunks,
-                transcript=transcript,
-                chunk_ids=chunk_ids
             )
         except Exception as e:
             raise Exception(f"Error processing YouTube video: {str(e)}")
 
-    async def store_memory_in_database(self, data) -> dict:
+    async def store_memory_in_database(self, chunks: List[str], meta_chunks: List[YouTubeSpecificMd], mem_id: str) -> str:
         try:
-            memory_data = {
-                "title": self.md.title,
-                "memData": data,
-                "chunkIds": [],
-                "memType": 'youtube',
-                "source": self.md.source,
-                "tags": self.md.tags,
-                "metadata": self.md.specific_desc.json(),
-            }
-            memory = await insert_memory_to_db(memory_data)
-            return {
-                "id": str(memory.id),
-                "title": memory.title,
-                "memData": memory.memData,
-                "chunkIds": memory.chunkIds,
-                "memType": memory.memType,
-                "source": memory.source,
-                "tags": memory.tags,
-                "metadata": memory.metadata,
-                "createdAt": memory.createdAt.isoformat() if memory.createdAt else None,
-                "updatedAt": memory.updatedAt.isoformat() if memory.updatedAt else None
-            }
+            # combine chunk on left and right with current chunk for each chunk
+            combined_chunks = []
+            for i in range(len(chunks)):
+                if i == 0:
+                    combined_chunks.append({
+                        "memData": chunks[i] + chunks[i+1],
+                        "chunkId": f"{mem_id}_{i}",
+                        "metadata": meta_chunks[i].json(),
+                    })
+                elif i == len(chunks) - 1:
+                    combined_chunks.append({
+                        "memData": chunks[i-1] + chunks[i],
+                        "chunkId": f"{mem_id}_{i}",
+                        "metadata": meta_chunks[i].json(),
+                    })
+                else:
+                    combined_chunks.append({
+                        "memData": chunks[i-1] + chunks[i],
+                        "chunkId": f"{mem_id}_{i}",
+                        "metadata": meta_chunks[i].json(),
+                    })
+
+            # make memory from chunks
+            memories = []
+            for chunk in combined_chunks:
+                mem_data = {
+                    "memId": mem_id,
+                    "chunkId": chunk["chunkId"],
+                    "title": self.md.title,
+                    "memData": chunk["memData"],
+                    "memType": 'youtube',
+                    "source": self.md.source,
+                    "tags": self.md.tags,
+                    "metadata": chunk["metadata"],
+                }
+                memories.append(mem_data)
+            # store memory in database using batches of n
+            batch_size = 100
+            for i in range(0, len(memories), batch_size):
+                if batch_size + i > len(memories):
+                    await insert_many_memories_to_db(memories[i: i + batch_size])
+                else:
+                    await insert_many_memories_to_db(memories[i: len(memories)])
+
         except Exception as e:
             raise RuntimeError(f"Error storing YouTube memory in database: {str(e)}")
