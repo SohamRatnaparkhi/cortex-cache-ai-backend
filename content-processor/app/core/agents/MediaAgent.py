@@ -1,6 +1,7 @@
 import io
+import uuid
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Generic, List, TypeVar
 
 import pytesseract
 from PIL import Image
@@ -12,7 +13,8 @@ from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import ImageSpecificMd, MediaSpecificMd, Metadata
-from app.services.MemoryService import insert_memory_to_db
+from app.services.MemoryService import (insert_many_memories_to_db,
+                                        insert_memory_to_db)
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.s3 import S3Operations
@@ -36,35 +38,9 @@ class MediaAgent(ABC, Generic[T]):
     @abstractmethod
     async def store_memory_in_database(self, data) -> dict:
         pass
-
-
-class VideoAgent(MediaAgent):
-    async def process_media(self) -> AgentResponse:
+    
+    async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
-            video_bytes = s3Opr.download_object(object_key=self.s3_media_key)
-            audio_content = extract_audio_from_video(video_bytes)
-            transcription = process_audio_for_transcription(audio_content=audio_content, language=self.md.language)
-            memory = await self.store_memory_in_database(transcription)
-            memory_id = memory['id']
-            self.md.mem_id = memory_id
-            chunks = use_jina.segment_data(transcription)
-            metadata = []
-            chunk_id = 0
-            for _ in chunks['chunks']:
-                md_copy = self.md.model_copy()
-                md_v = MediaSpecificMd(
-                    chunk_id=f"{chunk_id}",
-                    type='video',
-                )
-                md_copy.specific_desc = md_v
-                metadata.append(md_copy)
-                chunk_id += 1
-
-            if  chunks['chunks']:
-                chunks = chunks['chunks']   
-            else:
-                chunks = [transcription]
-                
             embeddings = use_jina.get_embedding(chunks)
             embeddings = [e["embedding"] for e in embeddings["data"]]
 
@@ -76,6 +52,42 @@ class VideoAgent(MediaAgent):
             pinecone_client = PineconeClient()
             pinecone_client.upsert_batch(vectors, batch_size)
 
+            return 
+        except Exception as e:
+            raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")
+    
+
+
+class VideoAgent(MediaAgent):
+    async def process_media(self) -> AgentResponse:
+        try:
+            video_bytes = s3Opr.download_object(object_key=self.s3_media_key)
+            audio_content = extract_audio_from_video(video_bytes)
+            transcription = process_audio_for_transcription(audio_content=audio_content, language=self.md.language)
+            
+            mem_id = str(uuid.uuid4())
+            self.md.mem_id = mem_id
+            
+            chunks = use_jina.segment_data(transcription)
+            metadata = []
+            chunk_id = 0
+            for _ in chunks['chunks']:
+                md_copy = self.md.model_copy()
+                md_v = MediaSpecificMd(
+                    chunk_id=f"{mem_id}_{chunk_id}",
+                    type='video',
+                )
+                md_copy.specific_desc = md_v
+                metadata.append(md_copy)
+                chunk_id += 1
+
+            if chunks['chunks']:
+                chunks = chunks['chunks']
+            else:
+                chunks = [transcription]
+
+            await self.store_memory_in_database(chunks, metadata, mem_id)
+            await self.embed_and_store_chunks(chunks, metadata)
 
             response = AgentResponse(
                 transcript=transcription,
@@ -87,32 +99,30 @@ class VideoAgent(MediaAgent):
             print(f"Detailed error: {str(e)}")
             raise RuntimeError(f"Error processing video: {str(e)}")
 
-    async def store_memory_in_database(self, data) -> dict:
+    async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], mem_id: str) -> None:
         try:
-            memory_data = {
-                "title": self.md.title,
-                "memData": data,
-                "chunkIds": [],
-                "memType": 'video',
-                "source": self.md.source,
-                "tags": self.md.tags,
-                "metadata": self.md.specific_desc.json(),
-            }
-            memory = await insert_memory_to_db(memory_data)
-            return {
-                "id": str(memory.id),
-                "title": memory.title,
-                "memData": memory.memData,
-                "chunkIds": memory.chunkIds,
-                "memType": memory.memType,
-                "source": memory.source,
-                "tags": memory.tags,
-                "metadata": memory.metadata,
-                "createdAt": memory.createdAt.isoformat() if memory.createdAt else None,
-                "updatedAt": memory.updatedAt.isoformat() if memory.updatedAt else None
-            }
+            memories = []
+            i = 0
+            for chunk, meta in zip(chunks, metadata):
+                mem_data = {
+                    "memId": mem_id,
+                    "chunkId": f'{mem_id}_{i}',
+                    "title": self.md.title,
+                    "memData": chunk,
+                    "memType": 'video',
+                    "source": self.md.source,
+                    "tags": self.md.tags,
+                    "metadata": meta.json(),
+                }
+                memories.append(mem_data)
+                i += 1
+            batch_size = 100
+            for i in range(0, len(memories), batch_size):
+                batch = memories[i:i + batch_size]
+                await insert_many_memories_to_db(batch)
+
         except Exception as e:
-            raise RuntimeError(f"Error storing memory in database: {str(e)}")
+            raise RuntimeError(f"Error storing video memory in database: {str(e)}")
 
 
 class AudioAgent(MediaAgent):
@@ -121,16 +131,17 @@ class AudioAgent(MediaAgent):
             audio_bytes = s3Opr.download_object(object_key=self.s3_media_key)
             transcription = process_audio_for_transcription(
                 audio_content=audio_bytes, language=self.md.language)
-            memory = await self.store_memory_in_database(transcription)
-            memory_id = memory['id']
-            self.md.mem_id = memory_id
+            
+            mem_id = str(uuid.uuid4())
+            self.md.mem_id = mem_id
+            
             chunks = use_jina.segment_data(transcription)
             metadata = []
             chunk_id = 0
             for _ in chunks['chunks']:
                 md_copy = self.md.model_copy()
                 md_v = MediaSpecificMd(
-                    chunk_id=f"{chunk_id}",
+                    chunk_id=f"{mem_id}_{chunk_id}",
                     type='audio',
                 )   
                 md_copy.specific_desc = md_v
@@ -141,17 +152,9 @@ class AudioAgent(MediaAgent):
                 chunks = chunks['chunks']
             else:
                 chunks = [transcription]
-                
-            embeddings = use_jina.get_embedding(chunks)
-            embeddings = [e["embedding"] for e in embeddings["data"]]
 
-            print(f"Embedding dimension: {len(embeddings[0])}")
-            
-            vectors = get_vectors(metadata, embeddings)
-
-            batch_size = 100
-            pinecone_client = PineconeClient()
-            pinecone_client.upsert_batch(vectors, batch_size)
+            await self.store_memory_in_database(chunks, metadata, mem_id)
+            await self.embed_and_store_chunks(chunks, metadata)
 
             response = AgentResponse(
                 transcript=transcription,
@@ -162,30 +165,28 @@ class AudioAgent(MediaAgent):
         except Exception as e:
             raise RuntimeError(f"Error processing audio: {str(e)}")
 
-    async def store_memory_in_database(self, data) -> dict:
+    async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], mem_id: str) -> None:
         try:
-            memory_data = {
-                "title": self.md.title,
-                "memData": data,
-                "chunkIds": [],
-                "memType": 'audio',
-                "source": self.md.source,
-                "tags": self.md.tags,
-                "metadata": self.md.specific_desc.json(),
-            }
-            memory = await insert_memory_to_db(memory_data)
-            return {
-                "id": str(memory.id),
-                "title": memory.title,
-                "memData": memory.memData,
-                "chunkIds": memory.chunkIds,
-                "memType": memory.memType,
-                "source": memory.source,
-                "tags": memory.tags,
-                "metadata": memory.metadata,
-                "createdAt": memory.createdAt.isoformat() if memory.createdAt else None,
-                "updatedAt": memory.updatedAt.isoformat() if memory.updatedAt else None
-            }
+            memories = []
+            i = 0
+            for chunk, meta in zip(chunks, metadata):
+                mem_data = {
+                    "memId": mem_id,
+                    "chunkId": f'{mem_id}_{i}',
+                    "title": self.md.title,
+                    "memData": chunk,
+                    "memType": 'audio',
+                    "source": self.md.source,
+                    "tags": self.md.tags,
+                    "metadata": meta.json(),
+                }
+                memories.append(mem_data)
+                i += 1
+
+            batch_size = 100
+            for i in range(0, len(memories), batch_size):
+                batch = memories[i:i + batch_size]
+                await insert_many_memories_to_db(batch)
         except Exception as e:
             raise RuntimeError(f"Error storing audio memory in database: {str(e)}")
 
@@ -196,16 +197,17 @@ class ImageAgent(MediaAgent):
             image_bytes = s3Opr.download_object(object_key=self.s3_media_key)
             image = Image.open(io.BytesIO(image_bytes))
             transcript = pytesseract.image_to_string(image)
-            memory = await self.store_memory_in_database(transcript)
-            memory_id = memory['id']
-            self.md.mem_id = memory_id
+            
+            mem_id = str(uuid.uuid4())
+            self.md.mem_id = mem_id
+            
             chunks = use_jina.segment_data(transcript)
             metadata = []
             chunk_id = 0
             for _ in chunks['chunks']:
                 md_copy = self.md.model_copy()
                 md_v = MediaSpecificMd(
-                    chunk_id=f"{chunk_id}",
+                    chunk_id=f"{mem_id}_{chunk_id}",
                     type='image',
                 )
                 md_copy.specific_desc = md_v
@@ -216,17 +218,9 @@ class ImageAgent(MediaAgent):
                 chunks = chunks['chunks']
             else:
                 chunks = [transcript]
-                
-            embeddings = use_jina.get_embedding(chunks)
-            embeddings = [e["embedding"] for e in embeddings["data"]]
 
-            print(f"Embedding dimension: {len(embeddings[0])}")
-            
-            vectors = get_vectors(metadata, embeddings)
-
-            batch_size = 100
-            pinecone_client = PineconeClient()
-            pinecone_client.upsert_batch(vectors, batch_size)
+            await self.store_memory_in_database(chunks, metadata, mem_id)
+            await self.embed_and_store_chunks(chunks, metadata)
 
             response = AgentResponse(
                 transcript=transcript,
@@ -237,30 +231,28 @@ class ImageAgent(MediaAgent):
         except Exception as e:
             raise RuntimeError(f"Error processing image: {str(e)}")
 
-    async def store_memory_in_database(self, data) -> dict:
+    async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], mem_id: str) -> None:
         try:
-            memory_data = {
-                "title": self.md.title,
-                "memData": data,
-                "chunkIds": [],
-                "memType": 'image',
-                "source": self.md.source,
-                "tags": self.md.tags,
-                "metadata": self.md.specific_desc.json(),
-            }
-            memory = await insert_memory_to_db(memory_data)
-            return {
-                "id": str(memory.id),
-                "title": memory.title,
-                "memData": memory.memData,
-                "chunkIds": memory.chunkIds,
-                "memType": memory.memType,
-                "source": memory.source,
-                "tags": memory.tags,
-                "metadata": memory.metadata,
-                "createdAt": memory.createdAt.isoformat() if memory.createdAt else None,
-                "updatedAt": memory.updatedAt.isoformat() if memory.updatedAt else None
-            }
+            memories = []
+            i = 0
+            for chunk, meta in zip(chunks, metadata):
+                mem_data = {
+                    "memId": mem_id,
+                    "chunkId": f"{mem_id}_{i}",
+                    "title": self.md.title,
+                    "memData": chunk,
+                    "memType": 'image',
+                    "source": self.md.source,
+                    "tags": self.md.tags,
+                    "metadata": meta.json(),
+                }
+                memories.append(mem_data)
+                i += 1
+            batch_size = 100
+            for i in range(0, len(memories), batch_size):
+                batch = memories[i:i + batch_size]
+                await insert_many_memories_to_db(batch)
+
         except Exception as e:
             raise RuntimeError(f"Error storing image memory in database: {str(e)}")
 
@@ -294,32 +286,21 @@ class File_PDFAgent(MediaAgent):
             full_text = '\n\n'.join(f"{page_content}\n\n{'*' * 50}Page {i} ends{'*' * 50}"
                                     for i, page_content in enumerate(text, 1))
         
-            memory = await self.store_memory_in_database(full_text)
-            memory_id = memory['id']
-            self.md.mem_id = memory_id
+            mem_id = str(uuid.uuid4())
+            self.md.mem_id = mem_id
 
             metadata = []
-            chunk_id = 0
-            for _ in chunks:
+            for chunk_id, _ in enumerate(chunks):
                 md_copy = self.md.model_copy()
                 md_v = MediaSpecificMd(
-                    chunk_id=f"{chunk_id}",
+                    chunk_id=f"{mem_id}_{chunk_id}",
                     type='pdf',
                 )
                 md_copy.specific_desc = md_v
                 metadata.append(md_copy)
-                chunk_id += 1
 
-            embeddings = use_jina.get_embedding(chunks)
-            embeddings = [e["embedding"] for e in embeddings["data"]]
-
-            print(f"Embedding dimension: {len(embeddings[0])}")
-            
-            vectors = get_vectors(metadata, embeddings)
-
-            batch_size = 100
-            pinecone_client = PineconeClient()
-            pinecone_client.upsert_batch(vectors, batch_size)
+            await self.store_memory_in_database(chunks, metadata, mem_id)
+            await self.embed_and_store_chunks(chunks, metadata)
 
             response = AgentResponse(
                 transcript=full_text,
@@ -330,29 +311,28 @@ class File_PDFAgent(MediaAgent):
         except Exception as e:
             raise RuntimeError(f"Error processing PDF: {str(e)}")
 
-    async def store_memory_in_database(self, data) -> dict:
+    async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], mem_id: str) -> None:
         try:
-            memory_data = {
-                "title": self.md.title,
-                "memData": data,
-                "chunkIds": [],
-                "memType": 'pdf',
-                "source": self.md.source,
-                "tags": self.md.tags,
-                "metadata": self.md.specific_desc.json(),
-            }
-            memory = await insert_memory_to_db(memory_data)
-            return {
-                "id": str(memory.id),
-                "title": memory.title,
-                "memData": memory.memData,
-                "chunkIds": memory.chunkIds,
-                "memType": memory.memType,
-                "source": memory.source,
-                "tags": memory.tags,
-                "metadata": memory.metadata,
-                "createdAt": memory.createdAt.isoformat() if memory.createdAt else None,
-                "updatedAt": memory.updatedAt.isoformat() if memory.updatedAt else None
-            }
+            memories = []
+            i = 0
+            for chunk, meta in zip(chunks, metadata):
+                mem_data = {
+                    "memId": mem_id,
+                    "chunkId": f"{mem_id}_{i}",
+                    "title": self.md.title,
+                    "memData": chunk,
+                    "memType": 'pdf',
+                    "source": self.md.source,
+                    "tags": self.md.tags,
+                    "metadata": meta.json(),
+                }
+                memories.append(mem_data)
+                i += 1
+
+            batch_size = 100
+            for i in range(0, len(memories), batch_size):
+                batch = memories[i:i + batch_size]
+                await insert_many_memories_to_db(batch)
+
         except Exception as e:
             raise RuntimeError(f"Error storing PDF memory in database: {str(e)}")
