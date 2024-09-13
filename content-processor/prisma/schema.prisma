@@ -9,10 +9,10 @@ generator client {
 }
 
 model Memory {
-    id        String   @id @default(uuid())
+    memId     String
+    chunkId   String
     title     String
     memData   String
-    chunkIds  String[]
     memType   String
     source    String?
     tags      String[]
@@ -22,6 +22,7 @@ model Memory {
     mapId     String?
     mindMap   MindMap? @relation(fields: [mapId], references: [id])
 
+    @@id([memId, chunkId])
     @@index([memType])
     @@index([tags])
 }
