@@ -1,0 +1,38 @@
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+generator client {
+    provider  = "prisma-client-py"
+    interface = "asyncio"
+}
+
+model Memory {
+    memId     String
+    chunkId   String
+    title     String
+    memData   String
+    memType   String
+    source    String?
+    tags      String[]
+    metadata  Json?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    mapId     String?
+    mindMap   MindMap? @relation(fields: [mapId], references: [id])
+
+    @@id([memId, chunkId])
+    @@index([memType])
+    @@index([tags])
+}
+
+model MindMap {
+    id          String   @id @default(uuid())
+    title       String
+    description String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    memories    Memory[]
+}
+
