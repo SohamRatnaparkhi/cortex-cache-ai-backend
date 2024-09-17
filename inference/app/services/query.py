@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
 
@@ -14,47 +16,44 @@ from app.utils.prompts.final_ans import prompt as final_ans_prompt
 from app.utils.prompts.query import generate_generalized_prompts
 from app.utils.prompts.ResponseScoring import scoring_prompt
 
+# Add this near the top of the file
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 async def user_query_service(query: QueryRequest):
 
     message = query.query
     metadata = query.metadata
-
-    # TODO: get user id, chat id and mem id (if available) from query metadata
-    # TODO: preprocess query
-    # TODO: get chat context from chat id
+    number = query.number
     context = ""
-    # TODO: truncate context and combine it with query
+    if number is None:
+        number = 4
+    if number > 5:
+        number = 4
     updated_query = preprocess_query(message, context)
+    prompt = generate_generalized_prompts(context=context, query=message, refined_query=updated_query)[number]
 
-    # TODO: send combination to LLM to refine it and get a logical single short query with some points included from context if required and short summarized context
-    llm_query = improve_query(message, updated_query, context)
-    # TODO: query to pinecone with this query and metadata to get top k results
-    pinecone_res = pinecone_query(llm_query, metadata);
-    # TODO: combine chunks of context and send to LLM to get final response
-    chunk_ids = [res['id'] for res in pinecone_res]
-    mems = await get_all_mems_based_on_chunk_ids(chunk_ids)
-    mems_data = [mem.memData for mem in mems]
-    return {
-        "updated_query": updated_query,
-        "llm_query": llm_query,
-        "pinecone_res": pinecone_res,
-        "mems_data": mems_data
-    }
+    return await process_single_query(message, context, prompt, metadata)
 
 async def process_single_query(message, context, refined_query: str, metadata: Dict) -> Dict:
-    # Execute Pinecone query
+    start_time = time.time()
+
     llm_query = improve_query(message, refined_query, context)
     query_temp = f"<question>{llm_query}</question>" 
+    logger.info(f"Improve query time: {time.time() - start_time:.4f} seconds")
 
+    pinecone_start = time.time()
     pinecone_result = pinecone_query(llm_query, metadata)
+    logger.info(f"Pinecone query time: {time.time() - pinecone_start:.4f} seconds")
 
-    # Extract chunk IDs
     chunk_ids = [res['id'] for res in pinecone_result]
     mem_ids = [res['mem_id'] for res in pinecone_result]
-    # Fetch memory data
-    mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
 
+    mem_data_start = time.time()
+    mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
+    logger.info(f"Get mem data time: {time.time() - mem_data_start:.4f} seconds")
+
+    complete_data_start = time.time()
     complete_data = ""
     ans_list = []
     for i in range(len(chunk_ids)):
@@ -71,11 +70,15 @@ async def process_single_query(message, context, refined_query: str, metadata: D
         complete_data += f"<mem_id>{mem_ids[i]}</mem_id>"
         ans_list.append(current_ans)
     
-    # print(complete_data)
-    # Prepare result
     complete_data = f"<question>{llm_query}</question>" + complete_data
+    logger.info(f"Build complete data time: {time.time() - complete_data_start:.4f} seconds")
+
+    final_ans_start = time.time()
     final_ans = get_final_answer(complete_data)
-    print("Got final answer for query: ", llm_query)
+    logger.info(f"Get final answer time: {time.time() - final_ans_start:.4f} seconds")
+
+    logger.info(f"Total process_single_query time: {time.time() - start_time:.4f} seconds")
+
     result = {
         "query": llm_query,
         "final_ans": final_ans.content,
@@ -85,21 +88,23 @@ async def process_single_query(message, context, refined_query: str, metadata: D
 
 
 async def user_multi_query_service2(query: QueryRequest):
+    start_time = time.time()
+
     message = query.query
     metadata = query.metadata
     context = ""  # Assume this is set properly
 
     updated_query = preprocess_query(message, context)
-    print("preprocessing done")
     refined_queries = generate_generalized_prompts(context=context, query=message, refined_query=updated_query)
-    print("refined queries generated")
     # parallel execution of queries
     results = await asyncio.gather(*[process_single_query(message, context,refined_query, metadata) for refined_query in refined_queries])
-    print("got all results")
-    print("scoring starts")
-    scored_answers = score_answers(message, updated_query, context, results[0]["final_ans"], results[1]["final_ans"], results[2]["final_ans"], results[3]["final_ans"], results[4]["final_ans"])
+    all_res_time = time.time() - start_time
+    logger.info(f"All results time: {all_res_time:.4f} seconds")
 
-    print(scored_answers)
+    score_start = time.time()
+    scored_answers = score_answers(message, updated_query, context, results[0]["final_ans"], results[1]["final_ans"], results[2]["final_ans"], results[3]["final_ans"], results[4]["final_ans"])
+    logger.info(f"Score answers time: {time.time() - score_start:.4f} seconds")
+    logger.info(f"Total user_multi_query_service2 time: {time.time() - start_time:.4f} seconds")
     return {
         "scored_answers": scored_answers,
         "final_ans": results
