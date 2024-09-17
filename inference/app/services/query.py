@@ -13,6 +13,7 @@ from app.schemas.query.ApiModel import QueryRequest
 from app.utils.Pinecone_query import pinecone_query
 from app.utils.Preprocessor import improve_query, preprocess_query
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
+from app.utils.prompts.Pro_final_ans import get_final_pro_answer
 from app.utils.prompts.query import generate_generalized_prompts
 from app.utils.prompts.ResponseScoring import scoring_prompt
 
@@ -25,6 +26,7 @@ async def user_query_service(query: QueryRequest):
     message = query.query
     metadata = query.metadata
     number = query.number
+    is_pro = query.is_pro
     context = ""
     if number is None:
         number = 4
@@ -33,9 +35,9 @@ async def user_query_service(query: QueryRequest):
     updated_query = preprocess_query(message, context)
     prompt = generate_generalized_prompts(context=context, query=message, refined_query=updated_query)[number]
 
-    return await process_single_query(message, context, prompt, metadata)
+    return await process_single_query(message, context, prompt, metadata, is_pro)
 
-async def process_single_query(message, context, refined_query: str, metadata: Dict) -> Dict:
+async def process_single_query(message, context, refined_query: str, metadata: Dict, is_pro=False) -> Dict:
     start_time = time.time()
 
     llm_query = improve_query(message, refined_query, context)
@@ -74,7 +76,11 @@ async def process_single_query(message, context, refined_query: str, metadata: D
     logger.info(f"Build complete data time: {time.time() - complete_data_start:.4f} seconds")
 
     final_ans_start = time.time()
-    final_ans = get_final_answer(complete_data)
+    final_ans = ""
+    if is_pro:
+        final_ans = get_final_pro_answer(message, refined_query, context, complete_data)
+    else:
+        final_ans = get_final_answer(complete_data)
     logger.info(f"Get final answer time: {time.time() - final_ans_start:.4f} seconds")
 
     logger.info(f"Total process_single_query time: {time.time() - start_time:.4f} seconds")

@@ -60,7 +60,8 @@ Your task:
 2. Identify any assumptions in the query and make them explicit.
 3. Consider different angles or perspectives from which the query could be approached.
 4. Formulate a series of related queries that together comprehensively cover the topic.
-5. Ensure each component is specific and searchable in a vector database.
+5. Ensure each answer is big enough to be a good answer.
+6. If users asks to generate a blog or a poem then generate accordingly.
 
 Refine the query by creating a comprehensive set of related queries that together address all aspects of the original question.
 """,
