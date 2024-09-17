@@ -3,3 +3,4 @@ tmp
 content-processor/.env
 consumer/.env
 **.pyc
+inference/.env
