@@ -25,7 +25,7 @@ from app.utils.prompts.ResponseScoring import scoring_prompt
 
 # Add this near the top of the file
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.)
 
 async def user_query_service(query: QueryRequest, is_stream=False):
 
@@ -74,8 +74,8 @@ async def process_single_query(message, context, refined_query: str, metadata: D
         complete_data += f"<data>{current_ans['mem_data']}"
         complete_data += f"<data_score>{current_ans['score']}</data_score></data>"
         chunkId = chunk_ids[i].split("_")[-1]
-        complete_data += f"<chunk_id>{chunkId}</chunk_id>"
-        complete_data += f"<mem_id>{mem_ids[i]}</mem_id>"
+        # complete_data += f"<chunk_id>{chunkId}</chunk_id>"
+        # complete_data += f"<mem_id>{mem_ids[i]}</mem_id>"
         ans_list.append(current_ans)
     
     complete_data = f"<question>{llm_query}</question>" + complete_data
@@ -96,7 +96,7 @@ async def process_single_query(message, context, refined_query: str, metadata: D
             return {
                 "curr_ans": complete_data,
                 "query": llm_query,
-                "prompt": final_ans_prompt
+                "prompt": final_ans_prompt + complete_data
             }
         final_ans = get_final_answer(complete_data)
     logger.info(f"Get final answer time: {time.time() - final_ans_start:.4f} seconds")
@@ -182,7 +182,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 async def stream_response(prompt: str) -> AsyncIterator[str]:
-    "got the prompt"
+    # "got the prompt"
     load_dotenv()
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     os.environ["GROQ_API_KEY"] = GROQ_API_KEY
@@ -191,14 +191,19 @@ async def stream_response(prompt: str) -> AsyncIterator[str]:
         temperature=1,
         max_tokens=None,
         streaming=True,
-        callbacks=[StreamingStdOutCallbackHandler()],
+        callbacks=[],
         timeout=None,
         max_retries=2
     )
 
-    async for chunk in chat.astream([HumanMessage(content=prompt)]):
-        # print(chunk.content)
-        yield f"data: {chunk.content}\n\n"
+    try:
+        async for chunk in chat.astream([HumanMessage(content=prompt)]):
+            # print(chunk.content, end="")
+            chunk_content = chunk.content.replace('\n', '\\n')
+            yield f"data: {chunk_content}\n\n"
+    except Exception as e:
+        print(f"Error during streaming: {str(e)}")
+        yield f"data: Error occurred during streaming: {str(e)}\n\n"
 
 def preprocess_json_string(json_string):
     # Remove newline characters within the JSON string values

@@ -71,22 +71,24 @@ Provide a detailed analysis and reasoning process following these steps:
 Your response MUST be in this JSON format:
 
 {{
-  "query_analysis": "Markdown formatted analysis with <chunk_id></chunk_id> citations",
-  "context_evaluation": "Markdown formatted evaluation with <chunk_id></chunk_id> citations",
-  "initial_answer_assessment": "Markdown formatted assessment with <chunk_id></chunk_id> citations",
+  "query_analysis": "Markdown formatted analysis ",
+  "context_evaluation": "Markdown formatted evaluation ",
+  "initial_answer_assessment": "Markdown formatted assessment ",
   "reasoning_steps": [
     {{
       "step_title": "Step 1",
-      "step_content": "Markdown formatted content with <chunk_id></chunk_id> citations"
+      "step_content": "Markdown formatted content "
     }},
     // ... (at least 5 steps)
   ],
-  "alternative_perspectives": "Markdown formatted discussion with <chunk_id></chunk_id> citations",
-  "critical_analysis": "Markdown formatted analysis with <chunk_id></chunk_id> citations",
-  "enhanced_answer": "Markdown formatted answer with <chunk_id></chunk_id> citations",
-  "practical_applications": "Markdown formatted discussion with <chunk_id></chunk_id> citations",
-  "further_exploration": "Markdown formatted suggestions with <chunk_id></chunk_id> citations"
+  "alternative_perspectives": "Markdown formatted discussion ",
+  "critical_analysis": "Markdown formatted analysis ",
+  "enhanced_answer": "Markdown formatted answer ",
+  "practical_applications": "Markdown formatted discussion ",
+  "further_exploration": "Markdown formatted suggestions "
 }}
+
+DONT INCLUDE ANY CHUNK_ID OR MEM_ID OR <data> TAGS IN YOUR RESPONSE.
 
 Structure your response as a JSON object with the following keys:
 - "query_analysis": Your breakdown and analysis of the user's query.
@@ -99,7 +101,7 @@ Structure your response as a JSON object with the following keys:
 - "practical_applications": Discussion of real-world applications and examples.
 - "further_exploration": Suggestions for related areas of investigation.
 
-ONLY THE VALUES of each key should be in markdown format and should clearly have citations based the chunk_id in <chunk_id> tags. Enclose the citation in <chunk_id></chunk_id> tags.
+ONLY THE VALUES of each key should be in markdown format.
 
 Use "I" instead of "we" in your response.
 
@@ -109,9 +111,8 @@ Ensure your analysis is thorough, logical, and transparent. Provide pro users wi
         rule = """
 Your response MUST be in markdown format and adhere to the following structure:
 
-# Final Answer
-
-[Provide your comprehensive, enhanced answer here, incorporating all the analysis and insights gained from the previous steps. Use appropriate markdown formatting for readability, including subheadings (##), bullet points, and emphasis where needed. Include citations using <chunk_id></chunk_id> tags as necessary.]
+Directly start with you answer first.Start it with <START_OF_ANSWER> tag and end it with <END_OF_ANSWER> tag. Don't include any heading like "Final Answer" or "Answer" or "Enhanced Answer" or "Comprehensive Answer" or anything similar.
+[ONLY provide your comprehensive, enhanced answer here, incorporating all the analysis and insights gained from the previous steps. Don't mention the refined query here. Use appropriate markdown formatting for readability, including subheadings (##), bullet points, and emphasis where needed. STRICTLY END THIS SECTION OF ANSWER WITH <END_OF_ANSWER> tag] 
 
 ## Key Insights
 
@@ -141,11 +142,12 @@ Your response MUST be in markdown format and adhere to the following structure:
 
 Ensure your response is thorough, well-structured, and provides significant value beyond the initial answer. Use "I" instead of "we" in your response.
 
-Use <chunk_id></chunk_id> tags to cite the sources of information you used in your response.
 
 ## Summary
 
-[Provide a concise summary of your response.]
+[Provide a concise summary of your response. Start is with <START_OF_SUMMARY> tag and end it with <END_OF_SUMMARY> tag]
+
+DONT MENTION THE WORDS "refined query" in your response. BASED ON THE REFINED QUERY, PROVIDE ANSWER LIKE A EXPERT PROFESSOR WOULD EXPLAIN TO A STUDENT.
 """
     return prompt + rule
 

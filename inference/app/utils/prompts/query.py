@@ -86,14 +86,43 @@ Create a refined query that seamlessly integrates relevant contextual informatio
 
 ]
     rule = f"""
-    If the context is not provided, then don't rely on it, but dont hallucinate at all. Strictly stick near about original query while still refining it.
-    Structure your response as a JSON object with the following keys:
-    - "refined_query": The refined query based on the original query and context.
-    The value to refined_query should strictly be a string and nothing else.
-    Example:
-    {{
-        "refined_query": "The refined query based on the original query and context."
-    }}
+    Your response must be in markdown format and adhere to the following structure:
+# Answer
+[Provide a concise but informative answer to the query, incorporating key relevant information. Use appropriate markdown formatting for readability, including subheadings (##) and emphasis where needed. ] 
+
+# Key Points
+[Key point 1]
+[Key point 2]
+[Key point 3]
+
+# Brief Explanation
+[Provide a brief explanation of the main concepts, broken down into 1-2 short paragraphs.]
+
+# Example
+[Give one brief, relevant example related to the topic.]
+
+Important guidelines for your response:
+1. Use "I" instead of "we" in your response.
+
+
+3. Be concise but informative in your explanation.
+4. Avoid mentioning "refined query" or explaining your process.
+5. Write in a clear, straightforward manner suitable for a general audience.
+6. If the query is unclear or lacks context, focus on the most likely interpretation without hallucinating information. 
+7. Use "I" instead of "we" in your response.
+
+CONTEXT FORMAT: 
+<data>
+[The data piece]
+</data>
+<data_score>
+[The score of the data piece]
+</data_score>
+Context: The context is provided in multiple data pieces, each enclosed within <data> tags and accompanied by a <data_score>. The <data_score> ranges from 0 to 1 and represents the relative relevance of each context piece among the top 25 results.
+
+Query: The user's question is enclosed in <question> tags.
+
+CONTEXT: 
     """
 
     for i in range(num_prompts):
