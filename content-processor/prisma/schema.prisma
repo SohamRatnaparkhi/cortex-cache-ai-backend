@@ -8,23 +8,51 @@ generator client {
     interface = "asyncio"
 }
 
+model Conversation {
+    id             String    @id @default(uuid())
+    title          String?
+    createdAt      DateTime  @default(now())
+    updatedAt      DateTime  @updatedAt
+    userId         String
+    user           User      @relation(fields: [userId], references: [id])
+    messages       Message[]
+    summary        String?   @db.Text
+    memoryIds      String[]  // Array of memory IDs associated with the conversation
+    status         ConversationStatus @default(ACTIVE)
+
+    @@index([userId, updatedAt])
+}
+
+model Message {
+    id             String       @id @default(uuid())
+    content        String       @db.Text
+    sender         String       // 'user_id' or 'assistant'
+    createdAt      DateTime     @default(now())
+    conversationId String
+    conversation   Conversation @relation(fields: [conversationId], references: [id])
+    memoryId       String?      // Optional, for user interactions with a specific memory
+    chunkIds       String[]     // Array of chunk IDs, mainly for assistant responses
+
+    @@index([conversationId, createdAt])
+}
+
 model Memory {
-    memId     String
-    chunkId   String
+    memId        String  
+    chunkId   String   
     title     String
-    memData   String
     memType   String
+    memData   String
     source    String?
     tags      String[]
     metadata  Json?
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
-    mapId     String?
-    mindMap   MindMap? @relation(fields: [mapId], references: [id])
+    mindMapId String?
+    mindMap   MindMap? @relation(fields: [mindMapId], references: [id])
 
-    @@id([memId, chunkId])
     @@index([memType])
     @@index([tags])
+    @@id([memId, chunkId])
 }
 
 model MindMap {
@@ -34,4 +62,65 @@ model MindMap {
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
     memories    Memory[]
+    sharedWith  SharedMindMap[]
+}
+
+model User {
+    id                    String         @id @default(uuid())
+    name                  String
+    email                 String         @unique
+    createdAt             DateTime       @default(now())
+    updatedAt             DateTime       @updatedAt
+    accountType           AccountType    @default(FREE)
+    currentBalance        Int            @default(0)
+    totalUsedTokens       Int            @default(0)
+    conversations         Conversation[]
+    sharedMemoriesFrom    SharedMemory[] @relation("SharedMemoryFrom")
+    sharedMemoriesTo      SharedMemory[] @relation("SharedMemoryTo")
+    sharedMindMapsFrom    SharedMindMap[] @relation("SharedMindMapFrom")
+    sharedMindMapsTo      SharedMindMap[] @relation("SharedMindMapTo")
+}
+
+model SharedMemory {
+    id         String     @id @default(uuid())
+    fromUserId String
+    fromUser   User       @relation("SharedMemoryFrom", fields: [fromUserId], references: [id])
+    toUserId   String
+    toUser     User       @relation("SharedMemoryTo", fields: [toUserId], references: [id])
+    memoryId   String
+    permission Permission
+    createdAt  DateTime   @default(now())
+
+    @@unique([fromUserId, toUserId, memoryId])
+}
+
+model SharedMindMap {
+    id         String     @id @default(uuid())
+    fromUserId String
+    fromUser   User       @relation("SharedMindMapFrom", fields: [fromUserId], references: [id])
+    toUserId   String
+    toUser     User       @relation("SharedMindMapTo", fields: [toUserId], references: [id])
+    mindMapId  String
+    mindMap    MindMap    @relation(fields: [mindMapId], references: [id])
+    permission Permission
+    createdAt  DateTime   @default(now())
+
+    @@unique([fromUserId, toUserId, mindMapId])
+}
+
+enum AccountType {
+    FREE
+    PREMIUM
+    ENTERPRISE
+}
+
+enum ConversationStatus {
+    ACTIVE
+    ARCHIVED
+    DELETED
+}
+
+enum Permission {
+    VIEW
+    EDIT
 }

@@ -4,9 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Generic, List, TypeVar
 
 import requests
-from dotenv import load_dotenv
-from git import Union
-
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
 from app.schemas.Common import AgentResponse
@@ -16,6 +13,8 @@ from app.services.MemoryService import (insert_many_memories_to_db,
 from app.utils.Link import (extract_code_from_repo,
                             extract_transcript_from_youtube)
 from app.utils.Vectors import get_vectors
+from dotenv import load_dotenv
+from git import Union
 
 load_dotenv()
 
@@ -140,6 +139,12 @@ class GitAgent(LinkAgent[GitSpecificMd]):
             raise RuntimeError(f"Error storing Git memory in database: {str(e)}")
 
 
+import logging
+import time
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
     """
     Agent for processing YouTube videos.
@@ -148,29 +153,21 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
     async def process_media(self) -> AgentResponse:
         """
         Process a YouTube video, extract its transcript, and segment it into chunks.
-
-        This method performs the following steps:
-        1. Extracts the video ID from the URL.
-        2. Retrieves the video transcript and metadata.
-        3. Segments the transcript into chunks using Jina AI.
-        4. Fetches additional video metadata (author and channel name).
-        5. Creates metadata for each chunk.
-
-        Returns:
-            AgentResponse: An object containing the segmented chunks, metadata, and full transcript.
-
-        Raises:
-            ValueError: If the transcript extraction fails.
-            Exception: If there's any error during the processing of the YouTube video.
         """
         try:
+            start_time = time.time()
+
             api_url = os.getenv("YOUTUBE_NO_EMBED_API_URL")
             video_url = self.resource_link
             video_id = video_url.split("/")[-1]
             if '?' in video_id:
                 video_id = video_id.split('?')[0]
-            transcript, video_title, video_desc = extract_transcript_from_youtube(video_url, language=self.md.language)
             
+            extract_start = time.time()
+            transcript, video_title, video_desc = extract_transcript_from_youtube(video_url, language=self.md.language)
+            extract_end = time.time()
+            logger.info(f"Transcript extraction took {extract_end - extract_start:.2f} seconds")
+
             mem_id = str(uuid.uuid4())
 
             self.md.mem_id = mem_id
@@ -178,9 +175,16 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             self.md.description = video_desc
             if not transcript:
                 raise ValueError("Failed to extract transcript from YouTube video")
+            
+            segment_start = time.time()
             chunks = use_jina.segment_data(transcript)
+            segment_end = time.time()
+            logger.info(f"Transcript segmentation took {segment_end - segment_start:.2f} seconds")
+
             if chunks is not None and "chunks" in chunks.keys():
                 chunks = chunks["chunks"]
+            
+            metadata_start = time.time()
             author = None
             channel_name = None
             response = requests.get(f"{api_url}{video_url}")
@@ -203,11 +207,21 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 md_copy = self.md.model_copy()
                 md_copy.specific_desc = ymd
                 meta_chunks.append(md_copy)
+            metadata_end = time.time()
+            logger.info(f"Metadata creation took {metadata_end - metadata_start:.2f} seconds")
 
-
+            store_start = time.time()
             await self.store_memory_in_database(chunks, meta_chunks, mem_id)
+            store_end = time.time()
+            logger.info(f"Storing memory in database took {store_end - store_start:.2f} seconds")
 
+            embed_start = time.time()
             await self.embed_and_store_chunks(chunks, meta_chunks)
+            embed_end = time.time()
+            logger.info(f"Embedding and storing chunks took {embed_end - embed_start:.2f} seconds")
+
+            end_time = time.time()
+            logger.info(f"Total processing time: {end_time - start_time:.2f} seconds")
 
             return AgentResponse(
                 transcript=transcript,
@@ -222,24 +236,39 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             # combine chunk on left and right with current chunk for each chunk
             combined_chunks = []
             for i in range(len(chunks)):
-                if i == 0:
-                    combined_chunks.append({
-                        "memData": chunks[i] + chunks[i+1],
-                        "chunkId": f"{mem_id}_{i}",
-                        "metadata": meta_chunks[i].json(),
-                    })
-                elif i == len(chunks) - 1:
-                    combined_chunks.append({
-                        "memData": chunks[i-1] + chunks[i],
-                        "chunkId": f"{mem_id}_{i}",
-                        "metadata": meta_chunks[i].json(),
-                    })
-                else:
-                    combined_chunks.append({
-                        "memData": chunks[i-1] + chunks[i],
-                        "chunkId": f"{mem_id}_{i}",
-                        "metadata": meta_chunks[i].json(),
-                    })
+                prev = i - 2
+                next = i + 1
+                current_chunk = chunks[i]
+                while prev > 0 and prev < i:
+                    current_chunk = chunks[prev] + current_chunk
+                    prev += 1
+                while next < len(chunks) and next <= i + 2:
+                    current_chunk = current_chunk + chunks[next]
+                    next += 1
+                combined_chunks.append({
+                    "memData": current_chunk,
+                    "chunkId": f"{mem_id}_{i}",
+                    "metadata": meta_chunks[i].json(),
+                })
+            # for i in range(len(chunks)):
+            #     if i == 0:
+            #         combined_chunks.append({
+            #             "memData": chunks[i] + chunks[i+1],
+            #             "chunkId": f"{mem_id}_{i}",
+            #             "metadata": meta_chunks[i].json(),
+            #         })
+            #     elif i == len(chunks) - 1:
+            #         combined_chunks.append({
+            #             "memData": chunks[i-1] + chunks[i],
+            #             "chunkId": f"{mem_id}_{i}",
+            #             "metadata": meta_chunks[i].json(),
+            #         })
+            #     else:
+            #         combined_chunks.append({
+            #             "memData": chunks[i-1] + chunks[i],
+            #             "chunkId": f"{mem_id}_{i}",
+            #             "metadata": meta_chunks[i].json(),
+            #         })
 
             # make memory from chunks
             memories = []
