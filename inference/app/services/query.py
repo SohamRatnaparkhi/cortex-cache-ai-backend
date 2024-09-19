@@ -1,11 +1,16 @@
 import asyncio
+import json
 import logging
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict
+from typing import AsyncIterator, Dict
 
 from dotenv import load_dotenv
+from langchain.callbacks import AsyncIteratorCallbackHandler
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain.schema import HumanMessage
 from langchain_groq import ChatGroq
 
 from app.prisma.prisma import get_all_mems_based_on_chunk_ids
@@ -13,7 +18,8 @@ from app.schemas.query.ApiModel import QueryRequest
 from app.utils.Pinecone_query import pinecone_query
 from app.utils.Preprocessor import improve_query, preprocess_query
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
-from app.utils.prompts.Pro_final_ans import get_final_pro_answer
+from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
+                                             get_final_pro_answer_prompt)
 from app.utils.prompts.query import generate_generalized_prompts
 from app.utils.prompts.ResponseScoring import scoring_prompt
 
@@ -21,7 +27,7 @@ from app.utils.prompts.ResponseScoring import scoring_prompt
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-async def user_query_service(query: QueryRequest):
+async def user_query_service(query: QueryRequest, is_stream=False):
 
     message = query.query
     metadata = query.metadata
@@ -35,9 +41,9 @@ async def user_query_service(query: QueryRequest):
     updated_query = preprocess_query(message, context)
     prompt = generate_generalized_prompts(context=context, query=message, refined_query=updated_query)[number]
 
-    return await process_single_query(message, context, prompt, metadata, is_pro)
+    return await process_single_query(message, context, prompt, metadata, is_pro, is_stream)
 
-async def process_single_query(message, context, refined_query: str, metadata: Dict, is_pro=False) -> Dict:
+async def process_single_query(message, context, refined_query: str, metadata: Dict, is_pro=False, is_stream=False) -> Dict:
     start_time = time.time()
 
     llm_query = improve_query(message, refined_query, context)
@@ -78,16 +84,35 @@ async def process_single_query(message, context, refined_query: str, metadata: D
     final_ans_start = time.time()
     final_ans = ""
     if is_pro:
+        if is_stream:
+            return {
+                "curr_ans": complete_data,
+                "query": llm_query,
+                "prompt": get_final_pro_answer_prompt(message, refined_query, context, complete_data, is_stream=True)
+            }
         final_ans = get_final_pro_answer(message, refined_query, context, complete_data)
     else:
+        if is_stream:
+            return {
+                "curr_ans": complete_data,
+                "query": llm_query,
+                "prompt": final_ans_prompt
+            }
         final_ans = get_final_answer(complete_data)
     logger.info(f"Get final answer time: {time.time() - final_ans_start:.4f} seconds")
 
     logger.info(f"Total process_single_query time: {time.time() - start_time:.4f} seconds")
 
+    # if is_pro and not is_stream:
+    #     final_ans = parse_response(final_ans.content)
+    #     return {
+    #         "final_ans": final_ans,
+    #         "query": llm_query
+    #     }
+
     result = {
         "query": llm_query,
-        "final_ans": final_ans.content,
+        "final_ans": convert_newlines(final_ans.content),
     }
     
     return result
@@ -151,3 +176,56 @@ def score_answers(original_query, refined_query, context, answer1, answer2, answ
     prompt = scoring_prompt(original_query, refined_query, context, answer1, answer2, answer3, answer4, answer5)
     scored_answers = llm.invoke(prompt)
     return scored_answers
+
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
+
+async def stream_response(prompt: str) -> AsyncIterator[str]:
+    "got the prompt"
+    load_dotenv()
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    os.environ["GROQ_API_KEY"] = GROQ_API_KEY
+    chat = ChatGroq(
+        model="llama-3.1-70b-versatile",
+        temperature=1,
+        max_tokens=None,
+        streaming=True,
+        callbacks=[StreamingStdOutCallbackHandler()],
+        timeout=None,
+        max_retries=2
+    )
+
+    async for chunk in chat.astream([HumanMessage(content=prompt)]):
+        # print(chunk.content)
+        yield f"data: {chunk.content}\n\n"
+
+def preprocess_json_string(json_string):
+    # Remove newline characters within the JSON string values
+    json_string = re.sub(r'(?<!\\)\\n', ' ', json_string)
+    # Replace double backslashes with single backslashes
+    json_string = json_string.replace('\\\\', '\\')
+    return json_string
+
+def parse_response(response_string):
+    try:
+        # Parse the outer JSON structure
+        response_dict = json.loads(response_string)
+        
+        # Get the 'final_ans' string and preprocess it
+        final_ans_string = preprocess_json_string(response_dict['final_ans'])
+        
+        # Parse the preprocessed 'final_ans' string
+        final_ans_dict = json.loads(final_ans_string)
+        
+        return final_ans_dict
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON: {e}")
+        return response_string
+
+def convert_newlines(text):
+    # Replace single \n with two spaces and a newline
+    converted = re.sub(r'([^\n])\n(?!\n)', r'\1  \n', text)
+    # Replace double \n with double newline (paragraph break)
+    converted = re.sub(r'\n\n', '\n\n', converted)
+    return converted
