@@ -30,8 +30,8 @@ model Message {
     createdAt      DateTime     @default(now())
     conversationId String
     conversation   Conversation @relation(fields: [conversationId], references: [id])
-    memoryId       String?      // Optional, for user interactions with a specific memory
-    chunkIds       String[]     // Array of chunk IDs, mainly for assistant responses
+    memoryId       String[]     @default([])
+    chunkIds       String[]     @default([])
 
     @@index([conversationId, createdAt])
 }
