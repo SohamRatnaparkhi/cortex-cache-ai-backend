@@ -21,7 +21,6 @@ def pinecone_query(query: str, metadata: dict):
                 raise ValueError(f"Unsupported metadata value type: {type(value)}")
     pinecone_filters = get_pinecone_filters(simple_metadata, range_filters, text_filters)
     vectors_obj = get_embedding([query])
-    print(query)
 
     if not vectors_obj['data']:
         return []

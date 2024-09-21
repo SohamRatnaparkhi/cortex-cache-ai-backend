@@ -13,8 +13,9 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.schema import HumanMessage
 from langchain_groq import ChatGroq
 
-from app.prisma.prisma import get_all_mems_based_on_chunk_ids
+from app.prisma.prisma import get_all_mems_based_on_chunk_ids, prisma
 from app.schemas.query.ApiModel import QueryRequest
+from app.services.messages import insert_message_in_db
 from app.utils.Pinecone_query import pinecone_query
 from app.utils.Preprocessor import improve_query, preprocess_query
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
@@ -25,15 +26,23 @@ from app.utils.prompts.ResponseScoring import scoring_prompt
 
 # Add this near the top of the file
 logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.)
+# logging.basicConfig(level=logging.INFO)
 
 async def user_query_service(query: QueryRequest, is_stream=False):
 
     message = query.query
-    metadata = query.metadata
     number = query.number
-    is_pro = query.is_pro
-    context = ""
+    context = ""  
+    conversation_id = query.conversation_id
+    messages = await prisma.message.find_many(where={"conversationId": conversation_id})
+    logger.info(f"Conversation: {messages}")
+    conversationFound = True
+    if messages is not None and len(messages) > 0:
+        context = "\n".join(["User: " + m.content if m.sender != 'ai' else "Assistant: " + m.content for m in messages])
+
+    else:
+        conversationFound = False
+    print("some new context: ", context)
     if number is None:
         number = 4
     if number > 5:
@@ -41,13 +50,17 @@ async def user_query_service(query: QueryRequest, is_stream=False):
     updated_query = preprocess_query(message, context)
     prompt = generate_generalized_prompts(context=context, query=message, refined_query=updated_query)[number]
 
-    return await process_single_query(message, context, prompt, metadata, is_pro, is_stream)
+    return await process_single_query(query, context, is_stream, newQuery=prompt, conversationFound=conversationFound)
 
-async def process_single_query(message, context, refined_query: str, metadata: Dict, is_pro=False, is_stream=False) -> Dict:
+async def process_single_query(query: QueryRequest, context: str, is_stream=False, newQuery = "", conversationFound = False) -> Dict:
+
+    message = query.query
+    metadata = query.metadata
+    refined_query = newQuery
+    is_pro = query.is_pro
     start_time = time.time()
-
+    logger.info(f"Improving llm query now with {message} and {refined_query}")
     llm_query = improve_query(message, refined_query, context)
-    query_temp = f"<question>{llm_query}</question>" 
     logger.info(f"Improve query time: {time.time() - start_time:.4f} seconds")
 
     pinecone_start = time.time()
@@ -57,9 +70,14 @@ async def process_single_query(message, context, refined_query: str, metadata: D
     chunk_ids = [res['id'] for res in pinecone_result]
     mem_ids = [res['mem_id'] for res in pinecone_result]
 
+    # Store message in the conversation in the database
+    logger.info("Inserting message in the database")
+    message = await insert_message_in_db(query_id=query.query_id, chunk_ids=list(set(chunk_ids)), mem_ids=list(set(mem_ids)), user_id=query.user_id, conversation_id=query.conversation_id,  user_query=query.query, conversationFound=conversationFound)
+    logger.info("Message inserted in the database")
+
     mem_data_start = time.time()
     mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
-    logger.info(f"Get mem data time: {time.time() - mem_data_start:.4f} seconds")
+    logger.info(f"Get memory data time: {time.time() - mem_data_start:.4f} seconds")
 
     complete_data_start = time.time()
     complete_data = ""
@@ -80,7 +98,7 @@ async def process_single_query(message, context, refined_query: str, metadata: D
     
     complete_data = f"<question>{llm_query}</question>" + complete_data
     logger.info(f"Build complete data time: {time.time() - complete_data_start:.4f} seconds")
-
+    logger.info(f"Message: {message}")
     final_ans_start = time.time()
     final_ans = ""
     if is_pro:
@@ -88,7 +106,8 @@ async def process_single_query(message, context, refined_query: str, metadata: D
             return {
                 "curr_ans": complete_data,
                 "query": llm_query,
-                "prompt": get_final_pro_answer_prompt(message, refined_query, context, complete_data, is_stream=True)
+                "prompt": get_final_pro_answer_prompt(message, refined_query, context, complete_data, is_stream=True),
+                "messageId": message.id
             }
         final_ans = get_final_pro_answer(message, refined_query, context, complete_data)
     else:
@@ -96,23 +115,19 @@ async def process_single_query(message, context, refined_query: str, metadata: D
             return {
                 "curr_ans": complete_data,
                 "query": llm_query,
-                "prompt": final_ans_prompt + complete_data
+                "prompt": final_ans_prompt + complete_data,
+                "messageId": message.id
             }
         final_ans = get_final_answer(complete_data)
     logger.info(f"Get final answer time: {time.time() - final_ans_start:.4f} seconds")
 
     logger.info(f"Total process_single_query time: {time.time() - start_time:.4f} seconds")
 
-    # if is_pro and not is_stream:
-    #     final_ans = parse_response(final_ans.content)
-    #     return {
-    #         "final_ans": final_ans,
-    #         "query": llm_query
-    #     }
 
     result = {
         "query": llm_query,
         "final_ans": convert_newlines(final_ans.content),
+        "messageId": message.id,
     }
     
     return result
@@ -128,7 +143,7 @@ async def user_multi_query_service2(query: QueryRequest):
     updated_query = preprocess_query(message, context)
     refined_queries = generate_generalized_prompts(context=context, query=message, refined_query=updated_query)
     # parallel execution of queries
-    results = await asyncio.gather(*[process_single_query(message, context,refined_query, metadata) for refined_query in refined_queries])
+    results = await asyncio.gather(*[process_single_query(query, context, False, refined_queries) for refined_query in refined_queries])
     all_res_time = time.time() - start_time
     logger.info(f"All results time: {all_res_time:.4f} seconds")
 
@@ -181,7 +196,7 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
-async def stream_response(prompt: str) -> AsyncIterator[str]:
+async def stream_response(prompt: str, messageId: str) -> AsyncIterator[str]:
     # "got the prompt"
     load_dotenv()
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -195,12 +210,27 @@ async def stream_response(prompt: str) -> AsyncIterator[str]:
         timeout=None,
         max_retries=2
     )
-
+    message_content = ""
+    message_id_sent = False
+    logger.info(f"Streaming response with prompt: {prompt}")
     try:
         async for chunk in chat.astream([HumanMessage(content=prompt)]):
             # print(chunk.content, end="")
+
+            if not message_id_sent:
+                message_id_sent = True
+                message_content += chunk.content
+                chunk_content = chunk.content.replace('\n', '\\n')
+                yield f"messageId: {messageId},data: {chunk_content}\n\n"
+                continue
+            message_content += chunk.content
             chunk_content = chunk.content.replace('\n', '\\n')
             yield f"data: {chunk_content}\n\n"
+
+        # Store message in the conversation in the database
+        message = await insert_message_in_db(query_id="", chunk_ids=[], mem_ids=[], user_id="", user_query="", content=message_content, only_message=True, message_id=messageId, conversation_id="")
+        if message is not None:
+            print("Message inserted in db")
     except Exception as e:
         print(f"Error during streaming: {str(e)}")
         yield f"data: Error occurred during streaming: {str(e)}\n\n"

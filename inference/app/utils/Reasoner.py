@@ -53,8 +53,6 @@ async def main():
     steps, total_time = await generate_response(prompt)
     for step_title, step_content, step_time in steps:
         print(f"{step_title} (Time: {step_time:.2f}s)")
-        print(step_content)
-        print()
     print(f"Total thinking time: {total_time:.2f}s")
 
 if __name__ == "__main__":

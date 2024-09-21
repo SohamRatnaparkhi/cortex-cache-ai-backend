@@ -28,5 +28,4 @@ async def handle_user_query(
 @router.post("/stream")
 async def stream_llm_response(query: QueryRequest):
     obj = await user_query_service(query, is_stream=True)
-    
-    return StreamingResponse(stream_response(obj["prompt"]), media_type="text/event-stream")
+    return StreamingResponse(stream_response(obj["prompt"], obj["messageId"]), media_type="text/event-stream")
