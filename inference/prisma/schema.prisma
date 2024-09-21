@@ -26,13 +26,13 @@ model Conversation {
 model Message {
     id             String       @id @default(uuid())
     content        String       @db.Text
-    sender         String       // 'user_id' or 'assistant'
+    sender         String       // 'user_id' or 'ai'
     createdAt      DateTime     @default(now())
     conversationId String
     conversation   Conversation @relation(fields: [conversationId], references: [id])
     memoryId       String[]     @default([])
     chunkIds       String[]     @default([])
-
+    questionId     String?
     @@index([conversationId, createdAt])
 }
 
@@ -79,6 +79,17 @@ model User {
     sharedMemoriesTo      SharedMemory[] @relation("SharedMemoryTo")
     sharedMindMapsFrom    SharedMindMap[] @relation("SharedMindMapFrom")
     sharedMindMapsTo      SharedMindMap[] @relation("SharedMindMapTo")
+    apiKeys               ApiKeys[]
+}
+
+model ApiKeys {
+    id        String   @id @default(uuid())
+    userId    String
+    user      User     @relation(fields: [userId], references: [id])
+    apiKey    String   @unique
+    createdAt DateTime @default(now())
+
+    @@unique([userId, apiKey])
 }
 
 model SharedMemory {
@@ -107,6 +118,8 @@ model SharedMindMap {
 
     @@unique([fromUserId, toUserId, mindMapId])
 }
+
+
 
 enum AccountType {
     FREE
