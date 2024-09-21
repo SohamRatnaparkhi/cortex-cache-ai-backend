@@ -63,9 +63,25 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], mem_ids: lis
         "chunkIds":  chunk_ids,
         "memoryId":  mem_ids
     }
+    
     ai_db_message = await prisma.message.create(data=ai_message)
-    user_db_message = await prisma.message.create(data=user_message)
-    # total = await prisma.message.create_many([ai_message, user_message])
+    user_db_message = await prisma.message.find_unique(where={"id": query_id})
+    if user_db_message:
+        logger.info("Updating existing message")
+        user_db_message = await prisma.message.update(
+            data={
+                "content": content,
+                "chunkIds": chunk_ids,
+                "memoryId": mem_ids,
+                "query_id": query_id
+            },
+            where={
+                "id": query_id
+            },
+        )
+    else:
+        user_db_message = await prisma.message.create(data=user_message)
+    
 
     if not ai_db_message:
         raise ValueError(" AI Message not created")
