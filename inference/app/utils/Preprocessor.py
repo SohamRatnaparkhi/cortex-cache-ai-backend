@@ -17,27 +17,19 @@ from nltk.tokenize import word_tokenize
 from pydantic import BaseModel, Field
 from spacy.lang.en.stop_words import STOP_WORDS
 
+from app.utils.llms import pro_query_llm as llm
+
 # nltk.download('punkt')
 # nltk.download('stopwords')
 
-load_dotenv()
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
-
-os.environ["GROQ_API_KEY"] = GROQ_API_KEY
-
-llm = ChatGroq(
-    model="llama-3.1-70b-versatile",
-    temperature=1,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2,
-)
 
 class LLMOutput(BaseModel):
-        refined_query: Union[str, List[str]] = Field(..., description="The refined query as a string or list of words")
+    refined_query: Union[str, List[str]] = Field(
+        ..., description="The refined query as a string or list of words")
+
 
 structured_llm = llm.with_structured_output(LLMOutput)
+
 
 def preprocess_query(query: str, context: str = "") -> str:
     # Convert to lowercase
@@ -58,6 +50,7 @@ def preprocess_query(query: str, context: str = "") -> str:
 
     return preprocessed_query
 
+
 def improve_query(query: str, refined_query: str, context: str = "", wantToUpdate: bool = False) -> str:
     try:
         if wantToUpdate:
@@ -66,7 +59,7 @@ def improve_query(query: str, refined_query: str, context: str = "", wantToUpdat
     Initial Refinement: {refined_query}
     {context}
     Task: Further refine the query to be more specific and searchable in a vector database, while staying true to the original intent. Focus on key concepts and technical terms. Respond in JSON format with key as 'refined_query' ONLY
-    """ 
+    """
         else:
             prompt = refined_query
         improved_query = structured_llm.invoke(prompt)
@@ -75,10 +68,13 @@ def improve_query(query: str, refined_query: str, context: str = "", wantToUpdat
         print(f"Error in improve_query: {str(e)}")
         return query
 
+
 nlp = spacy.load("en_core_web_sm")
 
 CUSTOM_STOP_WORDS = STOP_WORDS.copy()
 CUSTOM_STOP_WORDS.discard('name')  # Keep 'name' as it might be important in
+
+
 def preprocess_query2(query, context=""):
     doc = nlp(query.lower())
 

@@ -6,6 +6,7 @@ JINA_AI_BASE_URL_EMBEDDING = 'https://api.jina.ai/v1/embeddings'
 jina_seg_client = JinaClient.JinaAIClient(JINA_AI_BASE_URL_SEGMENTATION)
 jina_embed_client = JinaClient.JinaAIClient(JINA_AI_BASE_URL_EMBEDDING)
 
+
 def segment_data(data: str):
     body = {
         'content': data,
@@ -14,10 +15,19 @@ def segment_data(data: str):
     }
     return jina_seg_client.post(data=body)
 
-def get_embedding(data: list[str]):
+
+def get_embedding(data: list[str], retries=5):
     body = {
         'input': data,
         'model': 'jina-embeddings-v2-base-en',
         'embedding_type': 'float'
     }
-    return jina_embed_client.post(data=body)
+    print('Embeddings')
+    print(body)
+    res = jina_embed_client.post(data=body)
+    print(res)
+    if not res or not res['data']:
+        if retries > 0:
+            return get_embedding(data, retries - 1)
+        return None
+    return res

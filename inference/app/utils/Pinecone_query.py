@@ -5,43 +5,47 @@ from app.utils.JinaUtils import get_embedding
 
 
 def pinecone_query(query: str, metadata: dict):
-    pinecone_client = PineconeClient()
-    simple_metadata = {}
-    range_filters = {}
-    text_filters = {}
-    for key, value in metadata.items():
-        if key == 'tags':
-            text_filters[key] = value
-        else:
-            if isinstance(value, (int, float)):
-                range_filters[key] = value
-            elif isinstance(value, str):
-                text_filters[key] = [value]
+    try:
+        pinecone_client = PineconeClient()
+        simple_metadata = {}
+        range_filters = {}
+        text_filters = {}
+        for key, value in metadata.items():
+            if key == 'tags':
+                text_filters[key] = value
             else:
-                raise ValueError(f"Unsupported metadata value type: {type(value)}")
-    pinecone_filters = get_pinecone_filters(simple_metadata, range_filters, text_filters)
-    vectors_obj = get_embedding([query])
+                if isinstance(value, (int, float)):
+                    range_filters[key] = value
+                elif isinstance(value, str):
+                    text_filters[key] = [value]
+                else:
+                    raise ValueError(
+                        f"Unsupported metadata value type: {type(value)}")
+        pinecone_filters = get_pinecone_filters(
+            simple_metadata, range_filters, text_filters)
+        vectors_obj = get_embedding([query])
 
-    if not vectors_obj['data']:
-        return []
-    if len(vectors_obj['data']) == 0:
-        return []
-    vectors = vectors_obj['data'][0]['embedding']
-    # for vector in vectors_obj['data']:
-        # vectors.append(vector['embedding'])
-    # print(vectors)
-    res = pinecone_client.query(vector=vectors, top_k=25, filters=pinecone_filters)
-    print("pinecone returned") 
-    filtered_res = []
-    for result in res["matches"]:
-        filtered_res.append({
-            "metadata": result.metadata,
-            "score": result.score,
-            "id": result.metadata['specific_desc_chunk_id'],
-            "mem_id": result.metadata['mem_id']
-        })
-    return filtered_res  
-
+        if not vectors_obj or not vectors_obj['data']:
+            print("No vectors returned")
+            return []
+        vectors = vectors_obj['data'][0]['embedding']
+        res = pinecone_client.query(
+            vector=vectors, top_k=15, filters=pinecone_filters)
+        print("pinecone returned")
+        filtered_res = []
+        for result in res["matches"]:
+            if (result.score < 0.70):
+                continue
+            filtered_res.append({
+                "metadata": result.metadata,
+                "score": result.score,
+                "id": result.metadata['specific_desc_chunk_id'],
+                "mem_id": result.metadata['mem_id']
+            })
+        return filtered_res
+    except Exception as e:
+        print(f"Error in pinecone_query: {str(e)}")
+        return {[]}  # Return error message
 
 
 def create_pinecone_filter(metadata: Dict[str, Any]) -> Dict[str, Any]:

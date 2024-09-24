@@ -1,136 +1,19 @@
-def generate_generalized_prompts(context: str, query: str, refined_query: str, num_prompts: int = 5) -> list:
-    base_prompts = [
-        f"""
-Analyze the given query in the context of information retrieval:
+def generate_query_refinement_prompt(query: str, context: str = "", refined_query: str = '') -> str:
+    context = context if context else ""
+    prompt = f"""
+Given the following user query and context, refine the query to improve its effectiveness for vector database search:
 
-Original Query: {query}
-Initial Refinement: {refined_query}
-Context: {context if context != "" else "No additional context provided"}
-
-Your task:
-1. Identify the core concepts and entities in the query.
-2. Determine the implicit intent behind the query.
-3. Consider potential ambiguities or multiple interpretations.
-4. Suggest specific technical terms or jargon related to the query's domain.
-5. Propose synonyms or related concepts that could enhance the search.
-
-Based on this analysis, refine the query to be more specific, comprehensive, and optimized for vector database search. Ensure the refined query captures the original intent while expanding its scope for better results.
-""",
-    f"""
-Enhance the query for domain-specific vector search:
-
-Original Query: {query}
-Initial Refinement: {refined_query}
-Context: {context if context != "" else "No additional context provided"}
+User Query: {query}
+Query without stop words: {refined_query if refined_query else "No refined query available"}
+Context: {context if context else "No additional context provided"}
 
 Your task:
-1. Identify the primary domain(s) relevant to the query (e.g., technology, science, business).
-2. Incorporate domain-specific terminology and concepts.
-3. Consider recent trends or developments in the field that might be relevant.
-4. Add any necessary qualifiers to narrow the scope within the domain.
-5. Ensure the query is formulated to retrieve the most up-to-date and relevant information.
+1. Identify the main concepts and intent of the query.
+2. Expand on these concepts with relevant synonyms or related terms.
+3. Incorporate any relevant context to make the query more specific.
+4. Ensure the refined query maintains the original intent while being more comprehensive.
 
-Refine the query to be highly specific and tailored to the identified domain(s), optimizing it for vector database search.""",
-
-f"""
-Expand the query semantically for comprehensive vector search:
-
-Original Query: {query}
-Initial Refinement: {refined_query}
-Context: {context if context != "" else "No additional context provided"}
-
-Your task:
-1. Identify key concepts in the query and expand them with related terms.
-2. Consider different levels of abstraction (more general and more specific terms).
-3. Include potential synonyms and closely related concepts.
-4. Think about different aspects or facets of the main topic that might be relevant.
-5. Incorporate any contextual clues to broaden the query's scope while maintaining relevance.
-
-Create a semantically rich query that captures a wide range of potentially relevant information while staying true to the original intent.""",
-
-f"""
-Decompose and refine the query for detailed vector search:
-
-Original Query: {query}
-Initial Refinement: {refined_query}
-Context: {context if context != "" else "No additional context provided"}
-
-Your task:
-1. Break down the query into its fundamental components or sub-questions.
-2. Identify any assumptions in the query and make them explicit.
-3. Consider different angles or perspectives from which the query could be approached.
-4. Formulate a series of related queries that together comprehensively cover the topic.
-5. Ensure each answer is big enough to be a good answer.
-6. If users asks to generate a blog or a poem then generate accordingly.
-
-Refine the query by creating a comprehensive set of related queries that together address all aspects of the original question.
-""",
-
-f"""
-Integrate context for a highly targeted vector search query:
-
-Original Query: {query}
-Initial Refinement: {refined_query}
-Context: {context if context != "" else "No additional context provided"}
-
-Your task:
-1. Analyze the provided context and identify key elements relevant to the query.
-2. Incorporate contextual information to make the query more specific and targeted.
-3. Consider any time-sensitive or location-specific aspects mentioned in the context.
-4. Identify any contradictions between the query and context, and resolve them in the refinement.
-5. Ensure the refined query leverages the context to improve search precision.
-
-Create a refined query that seamlessly integrates relevant contextual information to enhance search accuracy and relevance.
-
+Provide the refined query in a clear, concise format suitable for vector database search.
 """
 
-]
-    rule = f"""
-    Your response must be in markdown format and adhere to the following structure:
-# Answer
-[Provide a concise but informative answer to the query, incorporating key relevant information. Use appropriate markdown formatting for readability, including subheadings (##) and emphasis where needed. ] 
-
-# Key Points
-[Key point 1]
-[Key point 2]
-[Key point 3]
-
-# Brief Explanation
-[Provide a brief explanation of the main concepts, broken down into 1-2 short paragraphs.]
-
-# Example
-[Give one brief, relevant example related to the topic.]
-
-Important guidelines for your response:
-1. Use "I" instead of "we" in your response.
-
-
-3. Be concise but informative in your explanation.
-4. Avoid mentioning "refined query" or explaining your process.
-5. Write in a clear, straightforward manner suitable for a general audience.
-6. If the query is unclear or lacks context, focus on the most likely interpretation without hallucinating information. 
-7. Use "I" instead of "we" in your response.
-
-CONTEXT FORMAT: 
-<data>
-[The data piece]
-</data>
-<data_score>
-[The score of the data piece]
-</data_score>
-Context: The context is provided in multiple data pieces, each enclosed within <data> tags and accompanied by a <data_score>. The <data_score> ranges from 0 to 1 and represents the relative relevance of each context piece among the top 25 results.
-
-Query: The user's question is enclosed in <question> tags.
-
-CONTEXT: 
-    """
-
-    for i in range(num_prompts):
-        base_prompts[i] = rule + base_prompts[i] + rule
-
-    return base_prompts
-
-
-
-
-
+    return prompt
