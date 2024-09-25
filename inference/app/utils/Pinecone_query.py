@@ -23,7 +23,14 @@ def pinecone_query(query: str, metadata: dict):
                         f"Unsupported metadata value type: {type(value)}")
         pinecone_filters = get_pinecone_filters(
             simple_metadata, range_filters, text_filters)
-        vectors_obj = get_embedding([query])
+        final_query = query if type(query) == str else query[0]
+        final_query = final_query if final_query[0] not in [
+            "[", "{"] else final_query[1:-1]
+
+        final_query = final_query if final_query[-1] not in [
+            "]", "}"] else final_query[:-1]
+        print(f"Final query: {final_query}")
+        vectors_obj = get_embedding([final_query])
 
         if not vectors_obj or not vectors_obj['data']:
             print("No vectors returned")

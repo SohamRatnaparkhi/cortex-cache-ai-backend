@@ -1,17 +1,11 @@
 import asyncio
 import json
 import logging
-import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncIterator, Dict
 
-from dotenv import load_dotenv
-from langchain.callbacks import AsyncIteratorCallbackHandler
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.schema import HumanMessage
-from langchain_groq import ChatGroq
 
 from app.prisma.prisma import get_all_mems_based_on_chunk_ids, prisma
 from app.schemas.query.ApiModel import QueryRequest
@@ -78,7 +72,7 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
 
         # Store message in the conversation in the database
         logger.info("Inserting message in the database")
-        message = await insert_message_in_db(query_id=query.query_id, chunk_ids=list(set(chunk_ids)), mem_ids=list(set(mem_ids)), user_id=query.user_id, conversation_id=query.conversation_id,  user_query=query.query, conversationFound=conversationFound)
+        message = await insert_message_in_db(query_id=query.query_id, chunk_ids=list(set(chunk_ids)), mem_ids=list(set(mem_ids)), user_id=query.user_id, conversation_id=query.conversation_id,  user_query=query.query, conversationFound=conversationFound, content=message)
         logger.info("Message inserted in the database")
         mem_data_start = time.time()
         mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
@@ -242,13 +236,14 @@ def parse_response(response_string):
 def convert_newlines(text):
     # Replace single \n with two spaces and a newline
     converted = re.sub(r'([^\n])\n(?!\n)', r'\1  \n', text)
-    # Replace double \n with double newline (paragraph break)
+    # Replace double \n with double newline (paraph break)
     converted = re.sub(r'\n\n', '\n\n', converted)
     return converted
 
 
-async def get_chat_context(conversation_id: str):
+async def get_chat_context(conversation_id: str, limit=2):
     try:
+        print("IN 1")
         messages = await prisma.message.find_many(
             where={
                 "conversationId": conversation_id
@@ -256,32 +251,36 @@ async def get_chat_context(conversation_id: str):
             order={
                 "createdAt": "desc"
             })
-        limit = 2
-        print("Here 3")
         queryIds = set()
         for message in messages:
+            # print(f"Message sender: {message.sender}, id: {message.id}")
+            # print(f"Message content: {message.content}")
             if message.sender != "ai":
-                queryIds.add(message.queryId)
+                queryIds.add(message.id)
             if len(queryIds) == limit:
                 break
-
         if len(queryIds) == 0:
             return "", len(messages) > 0
-
-        context = ""
-        ai_messages = {}
-        for message in messages[::-1]:
+        context = {}
+        for message in messages:
             if message.id in queryIds:
-                ai_messages[message.id] = {
-                    "user": message.content,
+                print(f"Message id: {message.id}")
+                context[message.id] = {
+                    "user": message.content
                 }
-            elif message.sender == "ai":
-                ai_messages[message.queryId]["ai"] = message.content
+            if message.questionId in queryIds:
+                print(f"Question id: {message.questionId}")
+                if (message.questionId not in context):
+                    context[message.questionId] = {}
+                context[message.questionId]["ai"] = message.content
 
-        for key in ai_messages:
-            context += f"User: {ai_messages[key]['user']}\nAssistant: {ai_messages[key]['ai']}\n"
-        print(context)
-        return context, True
+        # print(context)
+        final_context = ""
+        for key in context.keys():
+            final_context += f"User: {context[key]['user']}\nAI: {context[key]['ai']}\n"
+
+        return final_context, len(messages) > 0
+
     except Exception as e:
         print(f"Error in get_chat_context: {str(e)}")
         return "", len(messages) > 0

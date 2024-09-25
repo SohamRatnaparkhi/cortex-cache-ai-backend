@@ -7,13 +7,13 @@ load_dotenv()
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 summary_llm = ChatGroq(
     model="llama-3.1-70b-versatile",
     temperature=1,
-    max_tokens=200,
+    max_tokens=500,
     timeout=None,
     max_retries=5,
 )
