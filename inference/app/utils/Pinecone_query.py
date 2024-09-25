@@ -29,7 +29,7 @@ def pinecone_query(query: str, metadata: dict):
 
         final_query = final_query if final_query[-1] not in [
             "]", "}"] else final_query[:-1]
-        print(f"Final query: {final_query}")
+        # print(f"Final query: {final_query}")
         vectors_obj = get_embedding([final_query])
 
         if not vectors_obj or not vectors_obj['data']:

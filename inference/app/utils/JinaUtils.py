@@ -22,8 +22,8 @@ def get_embedding(data: list[str], retries=5):
         'model': 'jina-embeddings-v2-base-en',
         'embedding_type': 'float'
     }
-    print('Embeddings')
-    print(body)
+    # print('Embeddings')
+    # print(body)
     res = jina_embed_client.post(data=body)
     print(res)
     if not res or not res['data']:

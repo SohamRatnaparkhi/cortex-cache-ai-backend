@@ -1,11 +1,10 @@
 from typing import Dict, Optional
 
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
-
 from app.schemas.query.ApiModel import QueryRequest
 from app.services.query import (stream_response, user_multi_query_service2,
                                 user_query_service)
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 router = APIRouter(
     prefix='/query',
@@ -30,7 +29,5 @@ async def handle_user_query(
 
 @router.post("/stream")
 async def stream_llm_response(query: QueryRequest):
-    print(f"Query: {query}")
     obj = await user_query_service(query, is_stream=True)
-    print(f"Obj: {obj}")
     return StreamingResponse(stream_response(obj["prompt"], obj["messageId"]), media_type="text/event-stream")

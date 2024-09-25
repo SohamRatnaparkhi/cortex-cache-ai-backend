@@ -27,15 +27,13 @@ logging.basicConfig(level=logging.INFO)
 async def user_query_service(query: QueryRequest, is_stream=False):
 
     message = query.query
-    print("Here1")
     number = query.number
-    print("Here2")
+    logger.fatal(f"Initiated conversation for query: {message}")
     context, conversationFound = await get_chat_context(query.conversation_id)
+    logger.info(f"Context: {context}")
     conversation_id = query.conversation_id
-    print("Okay till here")
     messages = await prisma.message.find_many(where={"conversationId": conversation_id})
-    logger.info(f"Conversation: {messages}")
-    logging.info("some new context: ", context)
+    logger.fatal(f"Conversation: {messages}")
     if number is None:
         number = 4
     if number > 5:
@@ -43,7 +41,7 @@ async def user_query_service(query: QueryRequest, is_stream=False):
     updated_query = preprocess_query(message, context)
     prompt = generate_query_refinement_prompt(
         context=context, query=message, refined_query=updated_query)
-    logger.info(f"Prompt: {prompt}")
+    # logger.info(f"Prompt: {prompt}")
     return await process_single_query(query, context, is_stream, newQuery=prompt, conversationFound=conversationFound)
 
 
@@ -58,6 +56,7 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         logger.info(
             f"Improving llm query now with {message} and {refined_query}")
         llm_query = improve_query(message, refined_query, context)
+        logger.info(f"Improved query: {llm_query}")
         logger.info(
             f"Improve query time: {time.time() - start_time:.4f} seconds")
         logger.info(f"LLM query: {llm_query}")
@@ -66,7 +65,7 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         logger.info(
             f"Pinecone query time: {time.time() - pinecone_start:.4f} seconds")
 
-        print("pinecone result: ", pinecone_result)
+        # print("pinecone result: ", pinecone_result)
         chunk_ids = [res['id'] for res in pinecone_result]
         mem_ids = [res['mem_id'] for res in pinecone_result]
 
@@ -100,13 +99,13 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         logger.info(f"Message: {message}")
         final_ans_start = time.time()
         final_ans = ""
-        logger.info(complete_data)
+        # logger.info(complete_data)
         if is_pro:
             if is_stream:
                 return {
                     "curr_ans": complete_data,
                     "query": llm_query,
-                    "prompt": get_final_pro_answer_prompt(message, refined_query, context, complete_data, is_stream=True),
+                    "prompt": get_final_pro_answer_prompt(query.query, refined_query, context, complete_data, is_stream=True),
                     "messageId": message.id
                 }
             final_ans = get_final_pro_answer(
