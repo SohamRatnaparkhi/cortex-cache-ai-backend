@@ -9,16 +9,16 @@ generator client {
 }
 
 model Conversation {
-    id             String    @id @default(uuid())
-    title          String?
-    createdAt      DateTime  @default(now())
-    updatedAt      DateTime  @updatedAt
-    userId         String
-    user           User      @relation(fields: [userId], references: [id])
-    messages       Message[]
-    summary        String?   @db.Text
-    memoryIds      String[]  // Array of memory IDs associated with the conversation
-    status         ConversationStatus @default(ACTIVE)
+    id        String             @id @default(uuid())
+    title     String?
+    createdAt DateTime           @default(now())
+    updatedAt DateTime           @default(now()) @updatedAt
+    userId    String
+    user      User               @relation(fields: [userId], references: [id])
+    messages  Message[]
+    summary   String?            @db.Text
+    memoryIds String[] // Array of memory IDs associated with the conversation
+    status    ConversationStatus @default(ACTIVE)
 
     @@index([userId, updatedAt])
 }
@@ -26,19 +26,20 @@ model Conversation {
 model Message {
     id             String       @id @default(uuid())
     content        String       @db.Text
-    sender         String       // 'user_id' or 'assistant'
+    sender         String // 'user_id' or 'ai'
     createdAt      DateTime     @default(now())
     conversationId String
     conversation   Conversation @relation(fields: [conversationId], references: [id])
-    memoryId       String?      // Optional, for user interactions with a specific memory
-    chunkIds       String[]     // Array of chunk IDs, mainly for assistant responses
+    memoryId       String[]     @default([])
+    chunkIds       String[]     @default([])
+    questionId     String?
 
     @@index([conversationId, createdAt])
 }
 
 model Memory {
-    memId        String  
-    chunkId   String   
+    memId     String
+    chunkId   String
     title     String
     memType   String
     memData   String
@@ -50,35 +51,49 @@ model Memory {
     mindMapId String?
     mindMap   MindMap? @relation(fields: [mindMapId], references: [id])
 
+    dataSearchVector Unsupported("tsvector") @map("mem_data_search_vector")
+
+    @@id([memId, chunkId])
     @@index([memType])
     @@index([tags])
-    @@id([memId, chunkId])
+    @@index([dataSearchVector], type: Gin)
 }
 
 model MindMap {
-    id          String   @id @default(uuid())
+    id          String          @id @default(uuid())
     title       String
     description String?
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+    createdAt   DateTime        @default(now())
+    updatedAt   DateTime        @updatedAt
     memories    Memory[]
     sharedWith  SharedMindMap[]
 }
 
 model User {
-    id                    String         @id @default(uuid())
-    name                  String
-    email                 String         @unique
-    createdAt             DateTime       @default(now())
-    updatedAt             DateTime       @updatedAt
-    accountType           AccountType    @default(FREE)
-    currentBalance        Int            @default(0)
-    totalUsedTokens       Int            @default(0)
-    conversations         Conversation[]
-    sharedMemoriesFrom    SharedMemory[] @relation("SharedMemoryFrom")
-    sharedMemoriesTo      SharedMemory[] @relation("SharedMemoryTo")
-    sharedMindMapsFrom    SharedMindMap[] @relation("SharedMindMapFrom")
-    sharedMindMapsTo      SharedMindMap[] @relation("SharedMindMapTo")
+    id                 String          @id @default(uuid())
+    name               String
+    email              String          @unique
+    createdAt          DateTime        @default(now())
+    updatedAt          DateTime        @updatedAt
+    accountType        AccountType     @default(FREE)
+    currentBalance     Int             @default(0)
+    totalUsedTokens    Int             @default(0)
+    conversations      Conversation[]
+    sharedMemoriesFrom SharedMemory[]  @relation("SharedMemoryFrom")
+    sharedMemoriesTo   SharedMemory[]  @relation("SharedMemoryTo")
+    sharedMindMapsFrom SharedMindMap[] @relation("SharedMindMapFrom")
+    sharedMindMapsTo   SharedMindMap[] @relation("SharedMindMapTo")
+    apiKeys            ApiKeys[]
+}
+
+model ApiKeys {
+    id        String   @id @default(uuid())
+    userId    String
+    user      User     @relation(fields: [userId], references: [id])
+    apiKey    String   @unique
+    createdAt DateTime @default(now())
+
+    @@unique([userId, apiKey])
 }
 
 model SharedMemory {
