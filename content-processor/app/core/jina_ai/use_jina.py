@@ -18,7 +18,7 @@ def segment_data(data: str):
     return jina_seg_client.post(data=body)
 
 
-def get_embedding(data: list[str], task: Union[f'retrieval.query', f'retrieval.passage'] = 'retrieval.passage'):
+def get_embedding(data: list[str], task: Union[f'retrieval.query', f'retrieval.passage', f'text-matching'] = 'text-matching', retry=5):
     body = {
         'model': 'jina-embeddings-v3',
         'task': task,
@@ -27,4 +27,11 @@ def get_embedding(data: list[str], task: Union[f'retrieval.query', f'retrieval.p
         'embedding_type': 'float',
         'input': data,
     }
-    return jina_embed_client.post(data=body)
+    res = jina_embed_client.post(data=body)
+    # print(f"Jina Embedding Response: {res}")
+    if not res or not res['data']:
+        # print(res)
+        if retry > 0:
+            return get_embedding(data, task, retry - 1)
+        return []
+    return res

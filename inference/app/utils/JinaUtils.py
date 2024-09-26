@@ -1,3 +1,5 @@
+from typing import Union
+
 from app.core import JinaClient
 
 JINA_AI_BASE_URL_SEGMENTATION = 'https://segment.jina.ai/'
@@ -16,16 +18,20 @@ def segment_data(data: str):
     return jina_seg_client.post(data=body)
 
 
-def get_embedding(data: list[str], retries=5):
+def get_embedding(data: list[str], retries=5, task: Union[f'retrieval.query', f'retrieval.passage', f'text-matching'] = 'text-matching'):
+
     body = {
+        'model': 'jina-embeddings-v3',
+        'task': task,
+        'dimensions': 1024,
+        'late_chunking': False,
+        'embedding_type': 'float',
         'input': data,
-        'model': 'jina-embeddings-v2-base-en',
-        'embedding_type': 'float'
     }
     # print('Embeddings')
     # print(body)
     res = jina_embed_client.post(data=body)
-    print(res)
+    # print(res)
     if not res or not res['data']:
         if retries > 0:
             return get_embedding(data, retries - 1)

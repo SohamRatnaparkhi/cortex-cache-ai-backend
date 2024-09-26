@@ -51,17 +51,19 @@ class LinkAgent(ABC, Generic[T]):
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
             embeddings = use_jina.get_embedding(chunks)
+            # print(f"embeddings keys: {embeddings[0].keys()}")
+            # print(f"emb keys: {embeddings.keys()}")
             embeddings = [e["embedding"] for e in embeddings["data"]]
 
-            print(f"Embedding dimension: {len(embeddings[0])}")
+            print(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
 
             batch_size = 100
             pinecone_client = PineconeClient()
             # pinecone_client.upsert_batch(vectors, batch_size)
-            pinecone_client.upsert(vectors, batch_size)
-
+            res = pinecone_client.upsert(vectors, batch_size)
+            print(res)
             return
         except Exception as e:
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")

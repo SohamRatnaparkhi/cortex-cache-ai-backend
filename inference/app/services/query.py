@@ -67,11 +67,11 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
 
         # print("pinecone result: ", pinecone_result)
         chunk_ids = [res['id'] for res in pinecone_result]
-        mem_ids = [res['mem_id'] for res in pinecone_result]
+        memIds = [res['memId'] for res in pinecone_result]
 
         # Store message in the conversation in the database
         logger.info("Inserting message in the database")
-        message = await insert_message_in_db(query_id=query.query_id, chunk_ids=list(set(chunk_ids)), mem_ids=list(set(mem_ids)), user_id=query.user_id, conversation_id=query.conversation_id,  user_query=query.query, conversationFound=conversationFound, content=message)
+        message = await insert_message_in_db(query_id=query.query_id, chunk_ids=list(set(chunk_ids)), memIds=list(set(memIds)), user_id=query.user_id, conversation_id=query.conversation_id,  user_query=query.query, conversationFound=conversationFound, content=message)
         logger.info("Message inserted in the database")
         mem_data_start = time.time()
         mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
@@ -86,7 +86,7 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
                 "chunk_id": chunk_ids[i],
                 "score": [res['score'] for res in pinecone_result][i],
                 "mem_data": [mem.memData for mem in mem_data][i],
-                "mem_id": mem_ids[i]
+                "memId": memIds[i]
             }
             complete_data += f"<data><content>{current_ans['mem_data']}</content>"
             complete_data += f"<data_score>{current_ans['score']}</data_score>"
@@ -105,7 +105,7 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
                 return {
                     "curr_ans": complete_data,
                     "query": llm_query,
-                    "prompt": get_final_pro_answer_prompt(query.query, refined_query, context, complete_data, is_stream=True),
+                    "prompt": get_final_pro_answer_prompt(query.query, llm_query, context, complete_data, is_stream=True),
                     "messageId": message.id
                 }
             final_ans = get_final_pro_answer(
@@ -199,7 +199,7 @@ async def stream_response(prompt: str, messageId: str) -> AsyncIterator[str]:
             yield f"data: {chunk_content}\n\n"
         logger.info(message_content)
         # Store message in the conversation in the database
-        message = await insert_message_in_db(query_id="", chunk_ids=[], mem_ids=[], user_id="", user_query="", content=message_content, only_message=True, message_id=messageId, conversation_id="")
+        message = await insert_message_in_db(query_id="", chunk_ids=[], memIds=[], user_id="", user_query="", content=message_content, only_message=True, message_id=messageId, conversation_id="")
         if message is not None:
             logger.info("Message inserted in db")
     except Exception as e:

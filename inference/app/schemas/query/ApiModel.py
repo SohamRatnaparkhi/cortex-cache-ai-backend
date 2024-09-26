@@ -14,6 +14,6 @@ class QueryRequest(BaseModel):
     
 class DBResponse(BaseModel):
     data: str
-    mem_id: str
+    memId: str
     chunk_id: str
     score: float

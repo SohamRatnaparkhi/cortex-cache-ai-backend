@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.INFO)
 
 
-async def insert_message_in_db(query_id: str, chunk_ids: list[str], mem_ids: list[str], user_id: str, conversation_id: str, user_query: str, content: str = "", only_message: bool = False, message_id="", conversationFound=True) -> Message:
+async def insert_message_in_db(query_id: str, chunk_ids: list[str], memIds: list[str], user_id: str, conversation_id: str, user_query: str, content: str = "", only_message: bool = False, message_id="", conversationFound=True) -> Message:
     """
     Insert the message after Pinecone search results.
 
     Args:
     query_id (str): The unique identifier for the query.
     chunk_ids (list[str]): The list of chunk IDs.
-    mem_ids (list[str]): The list of memory IDs.
+    memIds (list[str]): The list of memory IDs.
     user_id (str): The unique identifier for the user.
     conversation_id (str): The unique identifier for the conversation.
     """
@@ -41,7 +41,7 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], mem_ids: lis
             conversation = await prisma.conversation.create({
                 "id": conversation_id,
                 "userId": user_id,
-                "memoryIds": mem_ids,
+                "memoryIds": memIds,
             })
             logger.info(f"Conversation created: {conversation}")
             if not conversation:
@@ -55,7 +55,7 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], mem_ids: lis
             "sender": "ai",
             "conversationId": conversation_id,
             "chunkIds": chunk_ids,
-            "memoryId": mem_ids,
+            "memoryId": memIds,
             "questionId": query_id
         }
         user_message = {
@@ -65,7 +65,7 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], mem_ids: lis
             "conversationId":  conversation_id,
             "questionId":  query_id,
             "chunkIds":  chunk_ids,
-            "memoryId":  mem_ids
+            "memoryId":  memIds
         }
 
         ai_db_message = await prisma.message.create(data=ai_message)
@@ -77,7 +77,7 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], mem_ids: lis
                 data={
                     "content": content,
                     "chunkIds": chunk_ids,
-                    "memoryId": mem_ids,
+                    "memoryId": memIds,
                 },
                 where={
                     "id": query_id

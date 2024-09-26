@@ -38,16 +38,16 @@ def pinecone_query(query: str, metadata: dict):
         vectors = vectors_obj['data'][0]['embedding']
         res = pinecone_client.query(
             vector=vectors, top_k=15, filters=pinecone_filters)
-        print("pinecone returned")
+        print(f"pinecone returned {len(res['matches'])} results")
         filtered_res = []
         for result in res["matches"]:
-            if (result.score < 0.70):
+            if (result.score < 0.40):
                 continue
             filtered_res.append({
                 "metadata": result.metadata,
                 "score": result.score,
                 "id": result.metadata['specific_desc_chunk_id'],
-                "mem_id": result.metadata['mem_id']
+                "memId": result.metadata['memId']
             })
         return filtered_res
     except Exception as e:
