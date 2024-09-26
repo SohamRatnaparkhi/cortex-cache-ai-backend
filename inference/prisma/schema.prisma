@@ -1,11 +1,11 @@
-datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
-}
-
 generator client {
     provider  = "prisma-client-py"
     interface = "asyncio"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
 }
 
 model Conversation {
@@ -14,11 +14,11 @@ model Conversation {
     createdAt DateTime           @default(now())
     updatedAt DateTime           @default(now()) @updatedAt
     userId    String
+    summary   String?
+    memoryIds String[]
+    status    ConversationStatus @default(ACTIVE)
     user      User               @relation(fields: [userId], references: [id])
     messages  Message[]
-    summary   String?            @db.Text
-    memoryIds String[] // Array of memory IDs associated with the conversation
-    status    ConversationStatus @default(ACTIVE)
 
     @@index([userId, updatedAt])
 }
@@ -26,38 +26,36 @@ model Conversation {
 model Message {
     id             String       @id @default(uuid())
     content        String       @db.Text
-    sender         String // 'user_id' or 'ai'
+    sender         String
     createdAt      DateTime     @default(now())
     conversationId String
-    conversation   Conversation @relation(fields: [conversationId], references: [id])
     memoryId       String[]     @default([])
     chunkIds       String[]     @default([])
     questionId     String?
+    conversation   Conversation @relation(fields: [conversationId], references: [id])
 
     @@index([conversationId, createdAt])
 }
 
 model Memory {
-    memId            String
-    chunkId          String
-    title            String
-    memType          String
-    memData          String
-    source           String?
-    tags             String[]
-    metadata         Json?
-    createdAt        DateTime                @default(now())
-    updatedAt        DateTime                @updatedAt
-    mindMapId        String?
-    mindMap          MindMap?                @relation(fields: [mindMapId], references: [id])
-    userId           String
-    dataSearchVector Unsupported("tsvector") @map("mem_data_search_vector")
-    User             User                    @relation(fields: [userId], references: [id])
+    memId     String
+    chunkId   String
+    title     String
+    memType   String
+    memData   String
+    source    String?
+    tags      String[]
+    metadata  Json?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    mindMapId String?
+    userId    String
+    mindMap   MindMap? @relation(fields: [mindMapId], references: [id])
+    User      User     @relation(fields: [userId], references: [id])
 
     @@id([memId, chunkId])
     @@index([memType])
     @@index([tags])
-    @@index([dataSearchVector], type: Gin)
 }
 
 model MindMap {
@@ -79,21 +77,22 @@ model User {
     accountType        AccountType     @default(FREE)
     currentBalance     Int             @default(0)
     totalUsedTokens    Int             @default(0)
+    apiKeys            ApiKeys[]
     conversations      Conversation[]
+    Memory             Memory[]
     sharedMemoriesFrom SharedMemory[]  @relation("SharedMemoryFrom")
     sharedMemoriesTo   SharedMemory[]  @relation("SharedMemoryTo")
     sharedMindMapsFrom SharedMindMap[] @relation("SharedMindMapFrom")
     sharedMindMapsTo   SharedMindMap[] @relation("SharedMindMapTo")
-    apiKeys            ApiKeys[]
-    Memory             Memory[]
 }
 
 model ApiKeys {
     id        String   @id @default(uuid())
     userId    String
-    user      User     @relation(fields: [userId], references: [id])
     apiKey    String   @unique
     createdAt DateTime @default(now())
+    user      User     @relation(fields: [userId], references: [id])
+    isPrimary Boolean  @default(false)
 
     @@unique([userId, apiKey])
 }
@@ -101,12 +100,12 @@ model ApiKeys {
 model SharedMemory {
     id         String     @id @default(uuid())
     fromUserId String
-    fromUser   User       @relation("SharedMemoryFrom", fields: [fromUserId], references: [id])
     toUserId   String
-    toUser     User       @relation("SharedMemoryTo", fields: [toUserId], references: [id])
     memoryId   String
     permission Permission
     createdAt  DateTime   @default(now())
+    fromUser   User       @relation("SharedMemoryFrom", fields: [fromUserId], references: [id])
+    toUser     User       @relation("SharedMemoryTo", fields: [toUserId], references: [id])
 
     @@unique([fromUserId, toUserId, memoryId])
 }
@@ -114,15 +113,23 @@ model SharedMemory {
 model SharedMindMap {
     id         String     @id @default(uuid())
     fromUserId String
-    fromUser   User       @relation("SharedMindMapFrom", fields: [fromUserId], references: [id])
     toUserId   String
-    toUser     User       @relation("SharedMindMapTo", fields: [toUserId], references: [id])
     mindMapId  String
-    mindMap    MindMap    @relation(fields: [mindMapId], references: [id])
     permission Permission
     createdAt  DateTime   @default(now())
+    fromUser   User       @relation("SharedMindMapFrom", fields: [fromUserId], references: [id])
+    mindMap    MindMap    @relation(fields: [mindMapId], references: [id])
+    toUser     User       @relation("SharedMindMapTo", fields: [toUserId], references: [id])
 
     @@unique([fromUserId, toUserId, mindMapId])
+}
+
+model memory_search_vector {
+    memid         String
+    chunkid       String
+    search_vector Unsupported("tsvector")?
+
+    @@id([memid, chunkid])
 }
 
 enum AccountType {
