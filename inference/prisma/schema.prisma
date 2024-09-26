@@ -38,22 +38,26 @@ model Message {
 }
 
 model Memory {
-    memId     String
-    chunkId   String
-    title     String
-    memType   String
-    memData   String
-    source    String?
-    tags      String[]
-    metadata  Json?
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-    mindMapId String?
-    mindMap   MindMap? @relation(fields: [mindMapId], references: [id])
+    memId            String
+    chunkId          String
+    title            String
+    memType          String
+    memData          String
+    source           String?
+    tags             String[]
+    metadata         Json?
+    createdAt        DateTime                @default(now())
+    updatedAt        DateTime                @updatedAt
+    mindMapId        String?
+    mindMap          MindMap?                @relation(fields: [mindMapId], references: [id])
+    userId           String
+    dataSearchVector Unsupported("tsvector") @map("mem_data_search_vector")
+    User             User                    @relation(fields: [userId], references: [id])
 
     @@id([memId, chunkId])
     @@index([memType])
     @@index([tags])
+    @@index([dataSearchVector], type: Gin)
 }
 
 model MindMap {
@@ -81,6 +85,7 @@ model User {
     sharedMindMapsFrom SharedMindMap[] @relation("SharedMindMapFrom")
     sharedMindMapsTo   SharedMindMap[] @relation("SharedMindMapTo")
     apiKeys            ApiKeys[]
+    Memory             Memory[]
 }
 
 model ApiKeys {

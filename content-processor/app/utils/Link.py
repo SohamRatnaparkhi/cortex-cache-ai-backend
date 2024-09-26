@@ -37,6 +37,7 @@ def clone_git_repo(repo_url: str) -> Union[bool, str]:
     except Exception as e:
         return False, f"Error cloning {repo_url}: {str(e)}"
 
+
 def extract_code_from_repo(repo_url: str, metadata: Metadata[GitSpecificMd]) -> AgentResponse:
     """
     Extract code from a git repository.
@@ -54,9 +55,11 @@ def extract_code_from_repo(repo_url: str, metadata: Metadata[GitSpecificMd]) -> 
             chunks=[],
             metadata=[]
         )
-    content = get_every_file_content_in_folder(path, is_code=True, repo_link=repo_url, md=metadata)
+    content = get_every_file_content_in_folder(
+        path, is_code=True, repo_link=repo_url, md=metadata)
     os.system(f"rm -rf ./tmp")
     return content
+
 
 def extract_youtube_transcript(video_id: str) -> str:
     """
@@ -82,6 +85,7 @@ def extract_youtube_transcript(video_id: str) -> str:
         transcript += " " + text
     return transcript.strip()
 
+
 def extract_transcript_from_youtube(video_url: str, language: str = 'english') -> Union[str, str, str]:
     """
     Extract transcript, title, and description from a YouTube video.
@@ -96,7 +100,7 @@ def extract_transcript_from_youtube(video_url: str, language: str = 'english') -
     crnt_path = os.getcwd()
     SAVE_PATH = f"{crnt_path}/tmp"
     try:
-        yt = YouTube(video_url)
+        yt = YouTube(url=video_url, client='WEB_CREATOR')
         video_title = yt.title
         video_description = yt.description
 
@@ -107,7 +111,8 @@ def extract_transcript_from_youtube(video_url: str, language: str = 'english') -
         with open(output_path, 'rb') as f:
             video_bytes = f.read()
         audio_content = extract_audio_from_video(video_bytes)
-        transcript = process_audio_for_transcription(audio_content=audio_content, language=language)
+        transcript = process_audio_for_transcription(
+            audio_content=audio_content, language=language)
 
         os.remove(video_file)
 
@@ -118,4 +123,3 @@ def extract_transcript_from_youtube(video_url: str, language: str = 'english') -
     except Exception as e:
         print(e)
         return {"error": str(e)}
-
