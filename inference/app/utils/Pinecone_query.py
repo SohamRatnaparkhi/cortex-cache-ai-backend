@@ -40,8 +40,9 @@ def pinecone_query(query: str, metadata: dict):
             vector=vectors, top_k=15, filters=pinecone_filters)
         print(f"pinecone returned {len(res['matches'])} results")
         filtered_res = []
+        FILTER_LIMIT = 0.40
         for result in res["matches"]:
-            if (result.score < 0.40):
+            if (result.score < FILTER_LIMIT):
                 continue
             filtered_res.append({
                 "metadata": result.metadata,

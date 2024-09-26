@@ -9,6 +9,7 @@ load_dotenv()
 class PineconeClient:
     def __init__(self):
         self.api_key = os.getenv("PINECONE_API_KEY")
+        # self.index_name = "jina-embeddings-v2-base-en"
         self.index_name = "jina-embeddings-v3"
         self.index = None
         self.client = self.connect()

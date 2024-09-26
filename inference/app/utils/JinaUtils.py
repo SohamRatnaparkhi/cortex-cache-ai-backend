@@ -28,10 +28,16 @@ def get_embedding(data: list[str], retries=5, task: Union[f'retrieval.query', f'
         'embedding_type': 'float',
         'input': data,
     }
+
+    # body = {
+    #     'input': data,
+    #     'model': 'jina-embeddings-v2-base-en',
+    #     'embedding_type': 'float'
+    # }
     # print('Embeddings')
     # print(body)
-    res = jina_embed_client.post(data=body)
     # print(res)
+    res = jina_embed_client.post(data=body)
     if not res or not res['data']:
         if retries > 0:
             return get_embedding(data, retries - 1)
