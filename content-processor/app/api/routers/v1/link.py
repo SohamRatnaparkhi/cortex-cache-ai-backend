@@ -1,8 +1,9 @@
+from fastapi import APIRouter, HTTPException
+
 from app.schemas import Link
 from app.schemas.Common import AgentResponseWrapper
 from app.schemas.videos import ProcessVideo
 from app.services import LinkService
-from fastapi import APIRouter, HTTPException
 
 router = APIRouter(
     prefix='/link',
@@ -24,8 +25,8 @@ async def process_git_link(request: Link.GitLinkRequest) -> AgentResponseWrapper
 
 
 @router.post(
-        "/process/youtube",
-        response_model=AgentResponseWrapper,
+    "/process/youtube",
+    response_model=AgentResponseWrapper,
 )
 async def process_youtube_link(request: Link.YoutubeLinkRequest) -> AgentResponseWrapper:
     """Process  link, and transcribe."""
@@ -36,5 +37,21 @@ async def process_youtube_link(request: Link.YoutubeLinkRequest) -> AgentRespons
             response=transcription
         )
         # return transcription
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "process/web",
+    response_model=AgentResponseWrapper,
+)
+async def process_web_link(request: Link.WebLinkRequest) -> AgentResponseWrapper:
+    """Process  link, and transcribe."""
+    try:
+        transcription = await LinkService.get_web_scraped_data(
+            request.url, request.metadata)
+        return AgentResponseWrapper(
+            response=transcription
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

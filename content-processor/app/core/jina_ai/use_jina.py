@@ -4,6 +4,7 @@ from app.core.jina_ai import Client
 
 JINA_AI_BASE_URL_SEGMENTATION = 'https://segment.jina.ai/'
 JINA_AI_BASE_URL_EMBEDDING = 'https://api.jina.ai/v1/embeddings'
+JINA_AI_BASE_WEB_SCRAPER = 'https://r.jina.ai/'
 
 jina_seg_client = Client.JinaAIClient(JINA_AI_BASE_URL_SEGMENTATION)
 jina_embed_client = Client.JinaAIClient(JINA_AI_BASE_URL_EMBEDDING)
@@ -12,6 +13,7 @@ jina_embed_client = Client.JinaAIClient(JINA_AI_BASE_URL_EMBEDDING)
 def segment_data(data: str):
     body = {
         'content': data,
+        "tokenizer": "o200k_base",
         "max_chunk_length": "1200",
         "return_chunks": "true"
     }
@@ -41,3 +43,11 @@ def get_embedding(data: list[str], task: Union[f'retrieval.query', f'retrieval.p
             return get_embedding(data, task, retry - 1)
         return []
     return res
+
+
+def web_scraper(link: str):
+    print("URL: ", JINA_AI_BASE_WEB_SCRAPER + link)
+    jina_web_scraper_client = Client.JinaAIClient(
+        JINA_AI_BASE_WEB_SCRAPER + link, isReader=True)
+    print(jina_web_scraper_client.isReader)
+    return jina_web_scraper_client.get()

@@ -4,7 +4,7 @@ from app.core.PineconeClient import PineconeClient
 from app.utils.JinaUtils import get_embedding
 
 
-def pinecone_query(query: str, metadata: dict):
+def pinecone_query(query: str, metadata: dict, top_k: int = 15) -> List[Dict[str, Any]]:
     try:
         pinecone_client = PineconeClient()
         simple_metadata = {}
@@ -37,19 +37,20 @@ def pinecone_query(query: str, metadata: dict):
             return []
         vectors = vectors_obj['data'][0]['embedding']
         res = pinecone_client.query(
-            vector=vectors, top_k=15, filters=pinecone_filters)
-        print(f"pinecone returned {len(res['matches'])} results")
+            vector=vectors, top_k=top_k, filters=pinecone_filters)
         filtered_res = []
-        FILTER_LIMIT = 0.40
+        FILTER_LIMIT = 0.0
         for result in res["matches"]:
             if (result.score < FILTER_LIMIT):
                 continue
             filtered_res.append({
-                "metadata": result.metadata,
+                # "metadata": result.metadata,
                 "score": result.score,
-                "id": result.metadata['specific_desc_chunk_id'],
+                "chunkId": result.metadata['specific_desc_chunk_id'],
                 "memId": result.metadata['memId']
             })
+        print(
+            f"pinecone returned {len(filtered_res)} results on query: {query}")
         return filtered_res
     except Exception as e:
         print(f"Error in pinecone_query: {str(e)}")

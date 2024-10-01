@@ -44,6 +44,7 @@ Important:
 - Focus solely on providing a high-quality answer to the user's question.
 - If memory is empty on you own then mention that 'I could not find this information in the memory, so I am providing the answer based on my knowledge'.
 - Do not include any meta-commentary about the response structure or the process of answering.
+- ANSWER SHOULD NOT BE MORE THAN 400 WORDS. KEEP THE ANSWER SHORT AND TO THE POINT. IF USER MENTIONS A WORD LIMIT THEN TRY TO KEEP THE ANSWER WITHIN THAT LIMIT.
 
 Remember: Your goal is to provide a helpful, informative, and tailored response that directly addresses the user's query, utilizing available relevant information and your knowledge base. Be flexible in your approach, adapting to the specific needs of each query while showcasing your advanced capabilities."""
     return prompt

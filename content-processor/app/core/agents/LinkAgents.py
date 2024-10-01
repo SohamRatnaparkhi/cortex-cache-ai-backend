@@ -12,7 +12,8 @@ from git import Union
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
 from app.schemas.Common import AgentResponse
-from app.schemas.Metadata import GitSpecificMd, Metadata, YouTubeSpecificMd
+from app.schemas.Metadata import (GitSpecificMd, Metadata, TextSpecificMd,
+                                  YouTubeSpecificMd)
 from app.services.MemoryService import (insert_many_memories_to_db,
                                         insert_memory_to_db)
 from app.utils.Link import (extract_code_from_repo,
@@ -282,3 +283,76 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
         except Exception as e:
             raise RuntimeError(
                 f"Error storing YouTube memory in database: {str(e)}")
+
+
+class WebAgent(LinkAgent[TextSpecificMd]):
+    """
+    Agent for processing web pages.
+    """
+
+    async def process_media(self) -> AgentResponse:
+        """
+        Process a web page, extract its text, and segment it into chunks.
+        """
+        link = self.resource_link
+
+        response = use_jina.web_scraper(link)
+        print(f"Web Scraper Response: {response}")
+        if response is not None:
+            content = response.get("data").get("content")
+            title = response.get("data").get("title")
+            description = response.get("data").get("description")
+
+            chunks = use_jina.segment_data(content)
+            if chunks is not None and "chunks" in chunks.keys():
+                chunks = chunks["chunks"]
+
+            memId = str(uuid.uuid4())
+            self.md.memId = memId
+            self.md.title += title
+            self.md.description += description
+
+            meta_chunks = []
+            for i in range(len(chunks)):
+                tmd = TextSpecificMd(
+                    chunk_id=f'{memId}_{i}',
+                    url=link,
+                )
+                md_copy = self.md.model_copy()
+                md_copy.specific_desc = tmd
+                meta_chunks.append(md_copy)
+
+            await self.store_memory_in_database(chunks, meta_chunks, memId)
+            await self.embed_and_store_chunks(chunks, meta_chunks)
+
+            return AgentResponse(
+                chunks=chunks,
+                metadata=meta_chunks,
+                transcript=content,
+            )
+
+    async def store_memory_in_database(self, chunks: List[str], meta_chunks: List[TextSpecificMd], memId: str):
+        try:
+            memories = []
+            for i, (chunk, meta) in enumerate(zip(chunks, meta_chunks)):
+                mem_data = {
+                    "memId": memId,
+                    "userId": self.md.user_id,
+                    "chunkId": f"{memId}_{i}",
+                    "title": self.md.title,
+                    "memData": chunk,
+                    "memType": 'web',
+                    "source": self.md.source,
+                    "tags": self.md.tags,
+                    "metadata": meta.json(),
+                }
+                memories.append(mem_data)
+
+            batch_size = 100
+            for i in range(0, len(memories), batch_size):
+                batch = memories[i:i + batch_size]
+                await insert_many_memories_to_db(batch)
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Error storing Web memory in database: {str(e)}")

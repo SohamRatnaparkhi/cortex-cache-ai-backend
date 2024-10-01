@@ -1,18 +1,10 @@
-import json
-import os
 import re
 from typing import List, Union
 
 import nltk
 import spacy
-from dotenv import load_dotenv
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-from langchain_groq import ChatGroq
 from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
 from pydantic import BaseModel, Field
 from spacy.lang.en.stop_words import STOP_WORDS
@@ -75,25 +67,24 @@ CUSTOM_STOP_WORDS = STOP_WORDS.copy()
 CUSTOM_STOP_WORDS.discard('name')  # Keep 'name' as it might be important in
 
 
-def preprocess_query2(query, context=""):
-    doc = nlp(query.lower())
+# nltk.download('stopwords')
+# nltk.download('punkt')
 
-    # Extract tokens while removing custom stop words and punctuation
-    tokens = [
-        token.lemma_ for token in doc if token.text not in CUSTOM_STOP_WORDS and not token.is_punct]
 
-    # Preserve named entities and multi-word expressions
-    for chunk in doc.noun_chunks:
-        if not all(token.is_stop for token in chunk):
-            tokens.append(chunk.lemma_)
+def prepare_fulltext_query(natural_query):
+    # Tokenize
+    tokens = nltk.word_tokenize(preprocess_query(natural_query.lower()))
 
-    # Add context-specific terms
-    context_doc = nlp(context.lower())
-    context_terms = [ent.text for ent in context_doc.ents if ent.label_ in [
-        'ORG', 'PRODUCT', 'TECH']]
-    tokens.extend([term for term in context_terms if term in query.lower()])
+    # Remove stop words
+    stop_words = set(stopwords.words('english'))
+    tokens = [token for token in tokens if token not in stop_words]
 
-    # Remove duplicates and join
-    processed_query = " ".join(list(dict.fromkeys(tokens)))
+    # Stemming
+    stemmer = PorterStemmer()
+    tokens = [stemmer.stem(token) for token in tokens]
 
-    return processed_query
+    # Add boolean operators and wildcards
+    query = ' AND '.join(tokens)
+    query = query.replace(' AND ', '* AND ') + '*'
+
+    return query

@@ -7,12 +7,15 @@ from typing import AsyncIterator, Dict
 
 from langchain.schema import HumanMessage
 
+from app.prisma import prisma as prisma_mod
 from app.prisma.prisma import get_all_mems_based_on_chunk_ids, prisma
 from app.schemas.query.ApiModel import QueryRequest
+from app.services.Memory import get_final_results_from_memory
 from app.services.messages import insert_message_in_db
 from app.utils.llms import answer_llm_pro as llm
 from app.utils.Pinecone_query import pinecone_query
-from app.utils.Preprocessor import improve_query, preprocess_query
+from app.utils.Preprocessor import (improve_query, prepare_fulltext_query,
+                                    preprocess_query)
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
 from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
                                              get_final_pro_answer_prompt)
@@ -61,13 +64,16 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
             f"Improve query time: {time.time() - start_time:.4f} seconds")
         logger.info(f"LLM query: {llm_query}")
         pinecone_start = time.time()
-        pinecone_result = pinecone_query(llm_query, metadata)
+        # combined_results = pinecone_query(llm_query, metadata)
+        combined_results = await get_final_results_from_memory(
+            original_query=message, refined_query=llm_query, metadata=metadata, max_results=10, top_k=15)
         logger.info(
             f"Pinecone query time: {time.time() - pinecone_start:.4f} seconds")
 
-        # print("pinecone result: ", pinecone_result)
-        chunk_ids = [res['id'] for res in pinecone_result]
-        memIds = [res['memId'] for res in pinecone_result]
+        # print("pinecone result: ", combined_results)
+        # print("Combined results: ", combined_results[0])
+        chunk_ids = [res['chunkId'] for res in combined_results]
+        memIds = [res['memId'] for res in combined_results]
 
         # Store message in the conversation in the database
         logger.info("Inserting message in the database")
@@ -81,10 +87,11 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         complete_data_start = time.time()
         complete_data = ""
         ans_list = []
+        logger.info(f'Citations received: {len(chunk_ids)}')
         for i in range(len(chunk_ids)):
             current_ans = {
                 "chunk_id": chunk_ids[i],
-                "score": [res['score'] for res in pinecone_result][i],
+                "score": [res['score'] for res in combined_results][i],
                 "mem_data": [mem.memData for mem in mem_data][i],
                 "memId": memIds[i]
             }
@@ -99,6 +106,20 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         logger.info(f"Message: {message}")
         final_ans_start = time.time()
         final_ans = ""
+        # full_text_query1 = prepare_fulltext_query(query.query)
+        # full_text_query2 = prepare_fulltext_query(llm_query)
+
+        # full_text_res1 = await prisma_mod.full_text_search(full_text_query1, 10)
+        # full_text_res2 = await prisma_mod.full_text_search(full_text_query2, 10)
+
+        # intersection = set(full_text_res1).intersection(set(full_text_res2))
+
+        # print('____-----------_____')
+
+        # print(full_text_res1)
+        # print(full_text_res2)
+
+        # print('____-----------_____')
         # logger.info(complete_data)
         if is_pro:
             if is_stream:

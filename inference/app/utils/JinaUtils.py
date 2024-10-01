@@ -12,6 +12,7 @@ jina_embed_client = JinaClient.JinaAIClient(JINA_AI_BASE_URL_EMBEDDING)
 def segment_data(data: str):
     body = {
         'content': data,
+        "tokenizer": "o200k_base",
         "max_chunk_length": "1000",
         "return_chunks": "true"
     }

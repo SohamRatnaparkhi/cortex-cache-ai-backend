@@ -25,8 +25,9 @@ def randomly_choose_one_key_with_equal_prob():
 
 
 class JinaAIClient():
-    def __init__(self, base_url):
+    def __init__(self, base_url, isReader=False):
         self.base_url = base_url
+        self.isReader = isReader
 
     def get_random_header(self):
         key = randomly_choose_one_key_with_equal_prob()
@@ -34,11 +35,17 @@ class JinaAIClient():
             "Content-Type": "application/json",
             "Authorization": f"Bearer {key}"
         }
+        if self.isReader:
+            headers["Accept"] = "application/json"
+            headers.pop("Content-Type")
         return headers
 
     def get(self, endpoint=''):
         headers = self.get_random_header()
+        # print(self.isReader)
+        # print(headers)
         response = requests.get(self.base_url + endpoint, headers=headers)
+        # print(response.json())
         return response.json()
 
     def post(self, data, endpoint=''):

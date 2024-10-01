@@ -34,10 +34,8 @@ class ImageSpecificMd(BaseModel):
 
 
 class TextSpecificMd(BaseModel):
-    word_count: int
-    reading_time: float  # in minutes
-    tags: list[str]
     chunk_id: str
+    url: str
 
 
 class MindMapSpecificMd(BaseModel):

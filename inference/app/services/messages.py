@@ -22,7 +22,6 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], memIds: list
     """
 
     try:
-        print('Here 1')
         if only_message:
             logger.info("Updating message in the database")
             return await prisma.message.update(
@@ -35,9 +34,7 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], memIds: list
             )
         # check if conversation exists
         # conversation = None
-        print("Here 4")
         if not conversationFound:
-            print("Here 5")
             conversation = await prisma.conversation.create({
                 "id": conversation_id,
                 "userId": user_id,
@@ -72,7 +69,6 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], memIds: list
         user_db_message = await prisma.message.find_unique(where={"id": query_id})
         if user_db_message:
             logger.info("Updating existing message")
-            print("Updating existing message")
             user_db_message = await prisma.message.update(
                 data={
                     "content": content,
@@ -92,7 +88,6 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], memIds: list
         if not user_db_message:
             raise ValueError("User Message not created")
 
-        logger.info(f"AI message inserted: {ai_db_message}")
         return ai_db_message
     except Exception as e:
         logger.error(f"Error inserting message in the database: {str(e)}")
