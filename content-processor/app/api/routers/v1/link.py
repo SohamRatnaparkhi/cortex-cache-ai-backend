@@ -1,9 +1,7 @@
-from fastapi import APIRouter, HTTPException
-
 from app.schemas import Link
 from app.schemas.Common import AgentResponseWrapper
-from app.schemas.videos import ProcessVideo
 from app.services import LinkService
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter(
     prefix='/link',
