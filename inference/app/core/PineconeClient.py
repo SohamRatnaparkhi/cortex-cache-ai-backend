@@ -5,13 +5,15 @@ from pinecone import Pinecone
 
 load_dotenv()
 
+
 class PineconeClient:
     def __init__(self):
         self.api_key = os.getenv("PINECONE_API_KEY")
-        self.index_name = os.getenv("PINECONE_INDEX")
+        # self.index_name = "jina-embeddings-v2-base-en"
+        self.index_name = "jina-embeddings-v3"
         self.index = None
         self.client = self.connect()
-    
+
     def connect(self):
         try:
             return Pinecone(api_key=self.api_key)
@@ -21,7 +23,8 @@ class PineconeClient:
 
     def create_index(self, index_name):
         try:
-            self.client.create_index(index_name=index_name, dimension=768, metric="cosine")
+            self.client.create_index(
+                index_name=index_name, dimension=768, metric="cosine")
             return self.client
         except Exception as e:
             print(f"Error creating index: {e}")
@@ -29,20 +32,20 @@ class PineconeClient:
 
     def describe_index(self):
         return self.client.describe_index(index_name=self.index_name)
-    
+
     def delete_index(self):
         self.client.delete_index(index_name=self.index_name)
         self.index_name = None
         return self.client
-    
-    def get_index(self) :
+
+    def get_index(self):
         if self.index is None:
             self.index = self.client.Index(name=self.index_name)
         return self.index
-    
+
     def list_indexes(self):
         return self.client.list_indexes()
-    
+
     def query(self, vector, top_k, filters: dict):
         try:
             index = self.get_index()
@@ -62,7 +65,7 @@ class PineconeClient:
         except Exception as e:
             print(f"Error upserting data: {e}")
             return None
-    
+
     def upsert_batch(self, vectors, batch_size=100):
         for i in range(0, len(vectors), batch_size):
             batch = vectors[i:i+batch_size]
@@ -70,8 +73,9 @@ class PineconeClient:
                 upsert_response = self.upsert(batch)
                 print(f'Upserted batch {i//batch_size + 1}: {upsert_response}')
             except Exception as upsert_error:
-                print(f"Error upserting batch {i//batch_size + 1}: {str(upsert_error)}")
-                
+                print(
+                    f"Error upserting batch {i//batch_size + 1}: {str(upsert_error)}")
+
     def delete(self, ids):
         try:
             index = self.get_index()
@@ -91,7 +95,7 @@ class PineconeClient:
     def describe_index_stats(self):
         index = self.get_index()
         return index.describe_index_stats()
-    
+
     def fetch(self, ids):
         index = self.get_index()
         return index.fetch(ids=ids)

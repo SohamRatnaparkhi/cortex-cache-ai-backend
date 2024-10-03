@@ -16,7 +16,7 @@ To formulate your response, follow these steps:
    - Use headings (##, ###) to organize longer responses
 6. For queries requiring detailed responses (e.g., "write a blog"), provide comprehensive, well-structured content.
 7. Cite sources using inline references corresponding to the <chunk_id> of the data piece used.
-8. Include a "References" section at the end, listing full citations with <mem_id> tags.
+8. Include a "References" section at the end, listing full citations with <memId> tags.
 9. Conclude with a confidence indicator (Low/Medium/High) based on the relevance and completeness of available information.
 10. Suggest 2-3 relevant follow-up questions the user might ask.
 

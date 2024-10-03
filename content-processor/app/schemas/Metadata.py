@@ -4,11 +4,15 @@ from pydantic import BaseModel
 
 # Specific metadata models for different content types
 
+
 class YouTubeSpecificMd(BaseModel):
     video_id: str
     channel_name: str
     author_name: str
     chunk_id: str
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+
 
 class GitSpecificMd(BaseModel):
     repo_name: str
@@ -18,9 +22,13 @@ class GitSpecificMd(BaseModel):
     chunk_type: str
     chunk_id: str
 
+
 class MediaSpecificMd(BaseModel):
     type: str
     chunk_id: str
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+
 
 class ImageSpecificMd(BaseModel):
     width: int
@@ -28,11 +36,11 @@ class ImageSpecificMd(BaseModel):
     format: str
     chunk_id: str
 
+
 class TextSpecificMd(BaseModel):
-    word_count: int
-    reading_time: float  # in minutes
-    tags: list[str]
     chunk_id: str
+    url: str
+
 
 class MindMapSpecificMd(BaseModel):
     memory_count: int
@@ -40,12 +48,15 @@ class MindMapSpecificMd(BaseModel):
     subtopics: list[str]
     chunk_id: str
 
+
 T = TypeVar('T')
 
 # Main Metadata model that includes common fields and specific metadata
+
+
 class Metadata(BaseModel, Generic[T]):
     user_id: str
-    mem_id: str
+    memId: str
     title: str
     description: str
     created_at: str
@@ -59,4 +70,3 @@ class Metadata(BaseModel, Generic[T]):
     ai_summary: Optional[str] = None
     ai_insights: Optional[str] = None
     related_memories: Optional[list[str]] = None
-
