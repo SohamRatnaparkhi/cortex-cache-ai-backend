@@ -33,7 +33,6 @@ async def get_citations_on_message_id(message_id: str, title: str, conversation_
             )
         except Exception as e:
             print(f"Error updating conversation title: {e}")
-
         return {
             "citations": specific_memories,
             "memoryIds": memoryIds,

@@ -16,6 +16,7 @@ from app.schemas.Metadata import (GitSpecificMd, Metadata, TextSpecificMd,
                                   YouTubeSpecificMd)
 from app.services.MemoryService import (insert_many_memories_to_db,
                                         insert_memory_to_db)
+from app.utils.AV import link_chunks_with_time
 from app.utils.Link import (extract_code_from_repo,
                             extract_transcript_from_youtube)
 from app.utils.Vectors import combine_data_chunks, get_vectors
@@ -172,12 +173,12 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 video_id = video_id.split('?')[0]
 
             extract_start = time.time()
-            transcript, video_title, video_desc = extract_transcript_from_youtube(
+            transcript, video_title, video_desc, timestamps = extract_transcript_from_youtube(
                 video_url, language=self.md.language)
             extract_end = time.time()
             logger.info(
                 f"Transcript extraction took {extract_end - extract_start:.2f} seconds")
-
+            self.md.source = video_url
             memId = str(uuid.uuid4())
 
             self.md.memId = memId
@@ -192,9 +193,11 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             segment_end = time.time()
             logger.info(
                 f"Transcript segmentation took {segment_end - segment_start:.2f} seconds")
-
+            print(timestamps[0])
             if chunks is not None and "chunks" in chunks.keys():
                 chunks = chunks["chunks"]
+
+            chunks_with_timestamps = link_chunks_with_time(chunks, timestamps)
 
             metadata_start = time.time()
             author = None
@@ -207,7 +210,7 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
 
             author = author or "Unknown"
             channel_name = channel_name or "Unknown"
-
+            print(chunks_with_timestamps[0])
             meta_chunks = []
             for i in range(len(chunks)):
                 ymd = YouTubeSpecificMd(
@@ -215,6 +218,8 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                     chunk_id=f'{memId}_{i}',
                     channel_name=channel_name,
                     author_name=author,
+                    start_time=chunks_with_timestamps[i]["start_time"],
+                    end_time=chunks_with_timestamps[i]["end_time"],
                 )
                 md_copy = self.md.model_copy()
                 md_copy.specific_desc = ymd

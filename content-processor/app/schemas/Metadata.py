@@ -10,6 +10,8 @@ class YouTubeSpecificMd(BaseModel):
     channel_name: str
     author_name: str
     chunk_id: str
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
 
 
 class GitSpecificMd(BaseModel):
@@ -24,6 +26,8 @@ class GitSpecificMd(BaseModel):
 class MediaSpecificMd(BaseModel):
     type: str
     chunk_id: str
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
 
 
 class ImageSpecificMd(BaseModel):

@@ -111,7 +111,7 @@ def extract_transcript_from_youtube(video_url: str, language: str = 'english') -
         with open(output_path, 'rb') as f:
             video_bytes = f.read()
         audio_content = extract_audio_from_video(video_bytes)
-        transcript = process_audio_for_transcription(
+        transcript, timestamps = process_audio_for_transcription(
             audio_content=audio_content, language=language)
 
         os.remove(video_file)
@@ -119,7 +119,7 @@ def extract_transcript_from_youtube(video_url: str, language: str = 'english') -
         if not transcript:
             raise ValueError("Failed to extract transcript from YouTube video")
 
-        return transcript, video_title, video_description
+        return transcript, video_title, video_description, timestamps
     except Exception as e:
         print(e)
         return {"error": str(e)}
