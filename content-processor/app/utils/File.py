@@ -123,34 +123,45 @@ def get_every_file_content_in_folder(folder_path: str, is_code: bool, repo_link:
                 if is_code:
                     ext = file_extension[1:]
                     if ext in INCLUDED_LANGUAGE_WITH_EXTENSION:
-                        chunks.extend(chunk_code(file_content, ext, 1000))
-                        current_md.specific_desc = GitSpecificMd(
-                            repo_name=repo_name,
-                            repo_creator_name=repo_creator_name,
-                            file_name=file_path,
-                            programming_language=ext,
-                            chunk_type="code",
-                            chunk_id=f"{chunk_id}"
-                        )
-                        metadata.append(current_md)
+                        code_chunks = chunk_code(file_content, ext, 1000)
+                        chunks.extend(code_chunks)
+                        for i in range(len(code_chunks)):
+                            current_md.specific_desc = GitSpecificMd(
+                                repo_name=repo_name,
+                                repo_creator_name=repo_creator_name,
+                                file_name=file_path,
+                                programming_language=ext,
+                                chunk_type="code",
+                                chunk_id=f"{chunk_id}"
+                            )
+                            metadata.append(current_md)
+                            chunk_id += 1
                     elif ext in OTHER_ALLOWED_CONFIG_EXT:
-                        chunks.extend(chunk_text(file_content, 1000))
-                        current_md.specific_desc = GitSpecificMd(
-                            repo_name=repo_name,
-                            repo_creator_name=repo_creator_name,
-                            file_name=file_path,
-                            programming_language=ext,
-                            chunk_type="config",
-                            chunk_id=f"{chunk_id}"
-                        )
-                        metadata.append(current_md)
+                        code_chunks = chunk_text(file_content, 1000)
+                        chunks.extend(code_chunks)
+                        for i in range(len(code_chunks)):
+                            current_md.specific_desc = GitSpecificMd(
+                                repo_name=repo_name,
+                                repo_creator_name=repo_creator_name,
+                                file_name=file_path,
+                                programming_language=ext,
+                                chunk_type="code",
+                                chunk_id=f"{chunk_id}"
+                            )
+                            metadata.append(current_md)
+                            chunk_id += 1
 
-                    chunk_id += 1
+                    # chunk_id += 1
+    print(len(all_contents))
+    print(len(chunks))
+    print(len(metadata))
     return AgentResponse(
         transcript=all_contents,
         chunks=chunks,
         metadata=metadata
     )
+
+
 def write_file(data: str) -> None:
     """
     Write data to a file named 'output.txt'.
@@ -160,6 +171,7 @@ def write_file(data: str) -> None:
     """
     with open("output.txt", mode="+a", encoding="utf-8") as writer:
         writer.write(data)
+
 
 def chunk_code(content: str, ext: str, context_size: int) -> list:
     """
@@ -187,6 +199,7 @@ def chunk_code(content: str, ext: str, context_size: int) -> list:
     splits = splitter.create_documents([content])
     return [split.page_content for split in splits]
 
+
 def chunk_text(content: str, context_size: int) -> list:
     """
     Split text content into chunks using Jina AI.
@@ -199,4 +212,4 @@ def chunk_text(content: str, context_size: int) -> list:
         list: A list of text chunks, or an empty list if chunking fails.
     """
     chunks = use_jina.segment_data(content)
-    return chunks.get("chunks", [])
+    return chunks

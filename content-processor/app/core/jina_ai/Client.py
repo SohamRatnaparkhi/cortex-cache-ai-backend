@@ -38,6 +38,7 @@ class JinaAIClient():
         if self.isReader:
             headers["Accept"] = "application/json"
             headers.pop("Content-Type")
+            headers["X-Remove-Selector"] = "img, a"
         return headers
 
     def get(self, endpoint=''):
