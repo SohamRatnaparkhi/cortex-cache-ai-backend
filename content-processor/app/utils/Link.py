@@ -4,7 +4,7 @@ from typing import Union
 
 import requests
 from git import Repo
-from pytubefix import YouTube
+from pytube import YouTube
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import JSONFormatter
 
@@ -100,7 +100,7 @@ def extract_transcript_from_youtube(video_url: str, language: str = 'english') -
     crnt_path = os.getcwd()
     SAVE_PATH = f"{crnt_path}/tmp"
     try:
-        yt = YouTube(url=video_url, client='WEB_CREATOR')
+        yt = YouTube(url=video_url)
         video_title = yt.title
         video_description = yt.description
 

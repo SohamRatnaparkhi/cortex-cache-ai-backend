@@ -6,54 +6,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// YouTubeSpecificMd represents specific metadata for YouTube content
-type YouTubeSpecificMd struct {
-	VideoID     string `json:"video_id"`
-	ChannelName string `json:"channel_name"`
-	AuthorName  string `json:"author_name"`
-	ChunkID     string `json:"chunk_id"`
-}
-
-// GitSpecificMd represents specific metadata for Git content
-type GitSpecificMd struct {
-	RepoName            string `json:"repo_name"`
-	RepoCreatorName     string `json:"repo_creator_name"`
-	FileName            string `json:"file_name"`
-	ProgrammingLanguage string `json:"programming_language"`
-	ChunkType           string `json:"chunk_type"`
-	ChunkID             string `json:"chunk_id"`
-}
-
-// MediaSpecificMd represents specific metadata for media content
-type MediaSpecificMd struct {
-	Type    string `json:"type"`
-	ChunkID string `json:"chunk_id"`
-}
-
-// ImageSpecificMd represents specific metadata for image content
-type ImageSpecificMd struct {
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
-	Format  string `json:"format"`
-	ChunkID string `json:"chunk_id"`
-}
-
-// TextSpecificMd represents specific metadata for text content
-type TextSpecificMd struct {
-	WordCount   int      `json:"word_count"`
-	ReadingTime float64  `json:"reading_time"`
-	Tags        []string `json:"tags"`
-	ChunkID     string   `json:"chunk_id"`
-}
-
-// MindMapSpecificMd represents specific metadata for mind map content
-type MindMapSpecificMd struct {
-	MemoryCount  int      `json:"memory_count"`
-	CentralTopic string   `json:"central_topic"`
-	Subtopics    []string `json:"subtopics"`
-	ChunkID      string   `json:"chunk_id"`
-}
-
 // Metadata represents the main metadata model that includes common fields and specific metadata
 type Metadata struct {
 	UserID          string      `json:"user_id"`

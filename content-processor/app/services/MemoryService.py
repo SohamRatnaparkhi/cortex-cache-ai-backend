@@ -8,12 +8,22 @@ from prisma.models import Memory
 from app.prisma.prisma import prisma
 
 
+def sanitize_input(data):
+    # Replace NUL characters
+    sanitized_data = {key: value.replace(
+        '\x00', '') for key, value in data.items()}
+    return sanitized_data
+
+
 async def insert_memory_to_db(memory_data: dict):
+    # sanitized_data = sanitize_input(memory_data)
+    # print(f"Sanitized data: {sanitized_data}")
     memory = await prisma.memory.create(data=memory_data)
     return memory
 
 
-async def insert_many_memories_to_db(memory_data: list):
+async def insert_many_memories_to_db(memory_data: list, isCode=False):
+    # memory_data = [sanitize_input(memory) for memory in memory_data]
     memories = await prisma.memory.create_many(data=memory_data)
     memory_ids = []
     chunk_ids = []
@@ -21,6 +31,10 @@ async def insert_many_memories_to_db(memory_data: list):
     JOINER = '<joiner>'
     CENTRAL_OPENER = '<central>'
     CENTRAL_CLOSER = '</central>'
+    if isCode:
+        JOINER = ' '
+        CENTRAL_OPENER = ''
+        CENTRAL_CLOSER = ''
     for memory in memory_data:
         memory_ids.append(memory["memId"])
         chunk_ids.append(memory["chunkId"])

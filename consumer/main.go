@@ -26,6 +26,7 @@ const (
 
 func handleMessages(message *sarama.ConsumerMessage) {
 	task := types.Task{}
+	// fmt.Print(message.Value)
 	err := json.Unmarshal(message.Value, &task)
 	if err != nil {
 		log.Printf("Failed to unmarshal task: %s", err)

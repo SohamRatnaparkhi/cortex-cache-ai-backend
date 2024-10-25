@@ -42,17 +42,26 @@ class MediaAgent(ABC, Generic[T]):
 
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
+            print("l1 = " + str(len(chunks)))
             embeddings = use_jina.get_embedding(chunks)
-            embeddings = [e["embedding"] for e in embeddings["data"]]
+            # print(embeddings)
+            # print(f"embeddings keys: {embeddings[0].keys()}")
+            # print(f"emb keys: {embeddings.keys()}")
+            # embeddings = [e["embedding"] for e in embeddings["data"]]
+            # print
+            embeddings = [e["embedding"]
+                          for e in embeddings if "embedding" in e.keys()]
+            print("l2 = " + str(len(embeddings)))
 
-            print(f"Embedding dimension: {len(embeddings[0])}")
+            print(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
 
             batch_size = 100
             pinecone_client = PineconeClient()
-            pinecone_client.upsert(vectors, batch_size)
-
+            # pinecone_client.upsert_batch(vectors, batch_size)
+            res = pinecone_client.upsert(vectors, batch_size)
+            print(res)
             return
         except Exception as e:
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")
@@ -71,7 +80,7 @@ class VideoAgent(MediaAgent):
             chunks = use_jina.segment_data(transcription)
             metadata = []
             chunk_id = 0
-            for _ in chunks['chunks']:
+            for _ in chunks:
                 md_copy = self.md.model_copy()
                 md_v = MediaSpecificMd(
                     chunk_id=f"{memId}_{chunk_id}",
@@ -81,9 +90,7 @@ class VideoAgent(MediaAgent):
                 metadata.append(md_copy)
                 chunk_id += 1
 
-            if chunks['chunks']:
-                chunks = chunks['chunks']
-            else:
+            if not chunks:
                 chunks = [transcription]
 
             await self.store_memory_in_database(chunks, metadata, memId)
@@ -143,7 +150,7 @@ class AudioAgent(MediaAgent):
             chunks = use_jina.segment_data(transcription)
             metadata = []
             chunk_id = 0
-            for _ in chunks['chunks']:
+            for _ in chunks:
                 md_copy = self.md.model_copy()
                 md_v = MediaSpecificMd(
                     chunk_id=f"{memId}_{chunk_id}",
@@ -153,10 +160,9 @@ class AudioAgent(MediaAgent):
                 metadata.append(md_copy)
                 chunk_id += 1
 
-            if chunks['chunks']:
-                chunks = chunks['chunks']
-            else:
+            if not chunks:
                 chunks = [transcription]
+            chunks = [transcription]
 
             await self.store_memory_in_database(chunks, metadata, memId)
             await self.embed_and_store_chunks(chunks, metadata)
@@ -210,7 +216,7 @@ class ImageAgent(MediaAgent):
             chunks = use_jina.segment_data(transcript)
             metadata = []
             chunk_id = 0
-            for _ in chunks['chunks']:
+            for _ in chunks:
                 md_copy = self.md.model_copy()
                 md_v = MediaSpecificMd(
                     chunk_id=f"{memId}_{chunk_id}",
@@ -220,9 +226,7 @@ class ImageAgent(MediaAgent):
                 metadata.append(md_copy)
                 chunk_id += 1
 
-            if chunks['chunks']:
-                chunks = chunks['chunks']
-            else:
+            if not chunks:
                 chunks = [transcript]
 
             await self.store_memory_in_database(chunks, metadata, memId)
@@ -278,19 +282,20 @@ class File_PDFAgent(MediaAgent):
             chunking_data = []
 
             for page_no, page in enumerate(pdf_reader.pages, 1):
-                page_text = page.extract_text()
+                page_text = sanitize_input(page.extract_text())
+                # page_text = page.extract_text()
                 text.append(page_text)
                 chunking_data.append(page_text.replace('\n', ''))
 
                 if page_no % combine_pages == 0:
                     chunk = use_jina.segment_data(''.join(chunking_data))
-                    if chunk['chunks']:
-                        chunks.extend(chunk['chunks'])
+                    if chunk:
+                        chunks.extend(chunk)
                     chunking_data.clear()
 
             if chunking_data:
                 chunk = use_jina.segment_data(''.join(chunking_data))
-                chunks.extend(chunk['chunks'])
+                chunks.extend(chunk)
 
             full_text = '\n\n'.join(f"{page_content}\n\n{'*' * 50}Page {i} ends{'*' * 50}"
                                     for i, page_content in enumerate(text, 1))
@@ -348,3 +353,14 @@ class File_PDFAgent(MediaAgent):
         except Exception as e:
             raise RuntimeError(
                 f"Error storing PDF memory in database: {str(e)}")
+
+
+def sanitize_input(data: str) -> str:
+    # Replace NUL characters
+    # try:
+    #     sanitized_data = {key: value.replace(
+    #         '\x00', '') for key, value in data.items()}
+    # except Exception as e:
+    #     sanitized_data = data
+    sanitized_data = data.replace('\x00', '')
+    return sanitized_data

@@ -19,12 +19,13 @@ import (
 const BASE = "/api/v1"
 
 var ENDPOINT_MAP = map[string]string{
-	"pdf":     BASE + "/file/process/pdf",
 	"git":     BASE + "/link/process/git",
 	"youtube": BASE + "/link/process/youtube",
-	"audio":   BASE + "/audio/process",
-	"video":   BASE + "/video/process",
-	"image":   BASE + "/image/process",
+	"web":     BASE + "/link/process/web",
+	"file":    BASE + "/file/process/pdf",
+	"audio":   BASE + "/file/process/audio",
+	"video":   BASE + "/file/process/video",
+	"image":   BASE + "/file/process/image",
 }
 
 var FAST_API_SERVER = ""

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -52,14 +53,23 @@ class LinkAgent(ABC, Generic[T]):
 
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
+            print("l1 = " + str(len(chunks)))
             embeddings = use_jina.get_embedding(chunks)
+            # print(embeddings)
             # print(f"embeddings keys: {embeddings[0].keys()}")
             # print(f"emb keys: {embeddings.keys()}")
-            embeddings = [e["embedding"] for e in embeddings["data"]]
+            # embeddings = [e["embedding"] for e in embeddings["data"]]
+            # print
+            embeddings = [e["embedding"]
+                          for e in embeddings if "embedding" in e.keys()]
+            print("l2 = " + str(len(embeddings)))
 
             print(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
+
+            print(len(metadata))
+            print(len(vectors))
 
             batch_size = 100
             pinecone_client = PineconeClient()
@@ -108,6 +118,8 @@ class GitAgent(LinkAgent[GitSpecificMd]):
             # Add memory id to chunks' metadata
             for meta in meta_chunks:
                 meta.memId = memId
+
+            print("Total chunks: ", len(chunks))
 
             await self.store_memory_in_database(chunks, meta_chunks, memId)
             await self.embed_and_store_chunks(chunks, meta_chunks)
@@ -308,9 +320,13 @@ class WebAgent(LinkAgent[TextSpecificMd]):
             title = response.get("data").get("title")
             description = response.get("data").get("description")
 
+            #  filter all tags from content
+            # content = content.replace
+
+            content = re.sub(r'<[^>]+>', '', content)
             chunks = use_jina.segment_data(content)
-            if chunks is not None and "chunks" in chunks.keys():
-                chunks = chunks["chunks"]
+            # if chunks is not None and "chunks" in chunks.keys():
+            #     chunks = chunks["chunks"]
 
             memId = str(uuid.uuid4())
             self.md.memId = memId

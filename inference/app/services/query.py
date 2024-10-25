@@ -24,7 +24,7 @@ from app.utils.prompts.ResponseScoring import scoring_prompt
 
 # Add this near the top of the file
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 async def user_query_service(query: QueryRequest, is_stream=False):
@@ -32,23 +32,24 @@ async def user_query_service(query: QueryRequest, is_stream=False):
     message = query.query
     number = query.number
     logger.fatal(f"Initiated conversation for query: {message}")
-    context, conversationFound = await get_chat_context(query.conversation_id)
+    context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, limit=5)
+    print("Context found")
     logger.info(f"Context: {context}")
-    conversation_id = query.conversation_id
-    messages = await prisma.message.find_many(where={"conversationId": conversation_id})
-    logger.fatal(f"Conversation: {messages}")
+    # conversation_id = query.conversation_id
+    # messages = await prisma.message.find_many(where={"conversationId": conversation_id})
+    # logger.fatal(f"Conversation: {messages}")
     if number is None:
         number = 4
     if number > 5:
         number = 4
     updated_query = preprocess_query(message, context)
     prompt = generate_query_refinement_prompt(
-        context=context, query=message, refined_query=updated_query)
+        context=query_only_context, query=message, refined_query=updated_query)
     # logger.info(f"Prompt: {prompt}")
     return await process_single_query(query, context, is_stream, newQuery=prompt, conversationFound=conversationFound)
 
 
-async def process_single_query(query: QueryRequest, context: str, is_stream=False, newQuery="", conversationFound=False) -> Dict:
+async def process_single_query(query: QueryRequest, context: str, is_stream=False, newQuery="", conversationFound=False, query_only_context: str = "") -> Dict:
 
     try:
         message = query.query
@@ -58,7 +59,11 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         start_time = time.time()
         logger.info(
             f"Improving llm query now with {message} and {refined_query}")
-        llm_query = improve_query(message, refined_query, context)
+
+        query_context = query_only_context if query_only_context != "" else context
+
+        llm_query = improve_query(message, refined_query, query_context)
+        print("Improved query: ", llm_query)
         logger.info(f"Improved query: {llm_query}")
         logger.info(
             f"Improve query time: {time.time() - start_time:.4f} seconds")
@@ -87,8 +92,11 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         complete_data_start = time.time()
         complete_data = ""
         ans_list = []
-        logger.info(f'Citations received: {len(chunk_ids)}')
-        for i in range(len(chunk_ids)):
+        logger.info(
+            f'Citations received: {len(chunk_ids)} == {len(mem_data)} == {len(memIds)} == {len(combined_results)}')
+        min_l = min(len(chunk_ids), len(mem_data),
+                    len(memIds), len(combined_results))
+        for i in range(min_l):
             current_ans = {
                 "chunk_id": chunk_ids[i],
                 "score": [res['score'] for res in combined_results][i],
@@ -165,7 +173,7 @@ async def user_multi_query_service2(query: QueryRequest):
 
     message = query.query
     metadata = query.metadata
-    context,  = get_chat_context(query.conversation_id)
+    context, query_only_context,  = get_chat_context(query.conversation_id)
 
     updated_query = preprocess_query(message, context)
     refined_queries = generate_query_refinement_prompt(
@@ -263,7 +271,7 @@ def convert_newlines(text):
 
 async def get_chat_context(conversation_id: str, limit=2):
     try:
-        print("IN 1")
+        # print("IN 1")
         messages = await prisma.message.find_many(
             where={
                 "conversationId": conversation_id
@@ -280,7 +288,7 @@ async def get_chat_context(conversation_id: str, limit=2):
             if len(queryIds) == limit:
                 break
         if len(queryIds) == 0:
-            return "", len(messages) > 0
+            return "", "", len(messages) > 0
         context = {}
         for message in messages:
             if message.id in queryIds:
@@ -295,12 +303,17 @@ async def get_chat_context(conversation_id: str, limit=2):
                 context[message.questionId]["ai"] = message.content
 
         # print(context)
+        query_only_context = ""
+        for key in context.keys():
+            query_only_context = f"{context[key]['user']}, " + \
+                query_only_context
+
         final_context = ""
         for key in context.keys():
             final_context += f"User: {context[key]['user']}\nAI: {context[key]['ai']}\n"
 
-        return final_context, len(messages) > 0
+        return final_context, query_only_context, len(messages) > 0
 
     except Exception as e:
         print(f"Error in get_chat_context: {str(e)}")
-        return "", len(messages) > 0
+        return "", "", len(messages) > 0

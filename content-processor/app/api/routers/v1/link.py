@@ -1,7 +1,8 @@
+from fastapi import APIRouter, HTTPException
+
 from app.schemas import Link
 from app.schemas.Common import AgentResponseWrapper
 from app.services import LinkService
-from fastapi import APIRouter, HTTPException
 
 router = APIRouter(
     prefix='/link',
@@ -40,7 +41,7 @@ async def process_youtube_link(request: Link.YoutubeLinkRequest) -> AgentRespons
 
 
 @router.post(
-    "process/web",
+    "/process/web",
     response_model=AgentResponseWrapper,
 )
 async def process_web_link(request: Link.WebLinkRequest) -> AgentResponseWrapper:
