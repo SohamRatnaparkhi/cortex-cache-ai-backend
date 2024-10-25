@@ -77,22 +77,25 @@ model User {
     accountType        AccountType     @default(FREE)
     currentBalance     Int             @default(0)
     totalUsedTokens    Int             @default(0)
+    password           String?
+    pfp                String?
     apiKeys            ApiKeys[]
     conversations      Conversation[]
     Memory             Memory[]
+    Session            Session[]
     sharedMemoriesFrom SharedMemory[]  @relation("SharedMemoryFrom")
     sharedMemoriesTo   SharedMemory[]  @relation("SharedMemoryTo")
     sharedMindMapsFrom SharedMindMap[] @relation("SharedMindMapFrom")
     sharedMindMapsTo   SharedMindMap[] @relation("SharedMindMapTo")
+    SocialUser         SocialUser[]
 }
 
 model ApiKeys {
-    id        String   @id @default(uuid())
     userId    String
     apiKey    String   @unique
     createdAt DateTime @default(now())
-    user      User     @relation(fields: [userId], references: [id])
     isPrimary Boolean  @default(false)
+    user      User     @relation(fields: [userId], references: [id])
 
     @@unique([userId, apiKey])
 }
@@ -130,6 +133,44 @@ model memory_search_vector {
     search_vector Unsupported("tsvector")?
 
     @@id([memid, chunkid])
+}
+
+model Session {
+    sessionToken String   @unique
+    userId       String
+    expires      DateTime
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime
+    User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SocialUser {
+    id           String   @id
+    userId       String
+    type         String
+    provider     String
+    providerId   String
+    refreshToken String?
+    accessToken  String?
+    expiresAt    BigInt?
+    token_id     String?
+    scope        String?
+    sessionState String?
+    tokenType    String?
+    updatedAt    DateTime @default(now())
+    User         User     @relation(fields: [userId], references: [id])
+
+    @@unique([provider, providerId])
+    @@index([provider, providerId])
+    @@index([userId])
+}
+
+model VerificationToken {
+    identifier String
+    token      String
+    expires    DateTime
+
+    @@id([identifier, token])
 }
 
 enum AccountType {
