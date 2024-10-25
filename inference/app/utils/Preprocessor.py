@@ -50,10 +50,12 @@ def improve_query(query: str, refined_query: str, context: str = "", wantToUpdat
     Original: {query}
     Initial Refinement: {refined_query}
     {context}
-    Task: Further refine the query to be more specific and searchable in a vector database, while staying true to the original intent. Focus on key concepts and technical terms. Respond in JSON format with key as 'refined_query' ONLY
+    Task: Further refine the query to be more specific and searchable in a vector database, while staying true to the original intent. Focus on key concepts and technical terms.
     """
         else:
             prompt = refined_query
+
+        print(f"Refining Prompt: {prompt}")
         improved_query = structured_llm.invoke(prompt)
         return improved_query.refined_query
     except Exception as e:

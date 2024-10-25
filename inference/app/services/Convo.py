@@ -27,6 +27,7 @@ async def get_citations_on_message_id(message_id: str, title: str, conversation_
         })
 
         try:
+            print(f"Updating conversation {conversation_id} of title: {title}")
             await prisma.conversation.update(
                 where={"id": conversation_id},
                 data={"title": title}

@@ -10,17 +10,24 @@ def pinecone_query(query: str, metadata: dict, top_k: int = 15) -> List[Dict[str
         simple_metadata = {}
         range_filters = {}
         text_filters = {}
+
         for key, value in metadata.items():
-            if key == 'tags':
-                text_filters[key] = value
+            if key in ['tags', 'memory']:
+                text_filters[key] = value if isinstance(
+                    value, list) else [value]
             else:
                 if isinstance(value, (int, float)):
-                    range_filters[key] = value
+                    range_filters[key] = {'min': value, 'max': value}
                 elif isinstance(value, str):
                     text_filters[key] = [value]
+                elif isinstance(value, list):
+                    text_filters[key] = value
+                elif isinstance(value, bool):
+                    simple_metadata[key] = value
                 else:
                     raise ValueError(
                         f"Unsupported metadata value type: {type(value)}")
+
         pinecone_filters = get_pinecone_filters(
             simple_metadata, range_filters, text_filters)
         final_query = query if type(query) == str else query[0]
@@ -97,8 +104,9 @@ def apply_advanced_filters(base_filter: Dict[str, Any],
         for key, values in text_filters.items():
             if len(values) == 1:
                 filter_dict[key] = {"$eq": values[0]}
-            else:
-                filter_dict[key] = {"$in": values}
+            elif len(values) > 1:
+                filter_dict[key] = {"$or": [{"$eq": value}
+                                            for value in values]}
 
     return filter_dict
 
@@ -110,4 +118,34 @@ def get_pinecone_filters(metadata: Dict[str, Any],
     base_filter = create_pinecone_filter(metadata)
     final_filter = apply_advanced_filters(
         base_filter, range_filters, text_filters)
-    return {"$and": [final_filter]} if len(final_filter) > 1 else final_filter
+
+    print(f"Generated Pinecone filters: {final_filter}")
+    return final_filter
+
+
+def generate_pinecone_query(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    simple_metadata = {}
+    range_filters = {}
+    text_filters = {}
+
+    for key, value in metadata.items():
+        if key in ['tags', 'memory']:
+            text_filters[key] = value if isinstance(value, list) else [value]
+        else:
+            if isinstance(value, (int, float)):
+                range_filters[key] = {'min': value, 'max': value}
+            elif isinstance(value, str):
+                text_filters[key] = [value]
+            elif isinstance(value, list):
+                text_filters[key] = value
+            elif isinstance(value, bool):
+                simple_metadata[key] = value
+            else:
+                raise ValueError(
+                    f"Unsupported metadata value type: {type(value)}")
+
+    pinecone_filters = get_pinecone_filters(
+        simple_metadata, range_filters, text_filters)
+    print(f"Generated Pinecone query: {pinecone_filters}")
+    return pinecone_filters
+    # return {"$and": [final_filter]} if len(final_filter) > 1 else final_filter

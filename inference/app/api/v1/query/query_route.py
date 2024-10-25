@@ -1,10 +1,16 @@
+import os
 from typing import Dict, Optional
+
+import jwt
+from dotenv import load_dotenv
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.schemas.query.ApiModel import QueryRequest
 from app.services.query import (stream_response, user_multi_query_service2,
                                 user_query_service)
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from app.utils.jwt import get_credentials
 
 router = APIRouter(
     prefix='/query',
@@ -28,6 +34,21 @@ async def handle_user_query(
 
 
 @router.post("/stream")
-async def stream_llm_response(query: QueryRequest):
-    obj = await user_query_service(query, is_stream=True)
-    return StreamingResponse(stream_response(obj["prompt"], obj["messageId"]), media_type="text/event-stream")
+async def stream_llm_response(query: QueryRequest, request: Request):
+    try:
+        # get Authorization header
+        header = request.headers.get("Authorization")
+        print(f"Authorization header: {header}")
+
+        # decode jwt token
+        (userId, emailId, apiKey) = get_credentials(header)
+
+        query.user_id = userId
+        # print("reached")
+        print(query)
+        obj = await user_query_service(query, is_stream=True)
+        return StreamingResponse(stream_response(obj["prompt"], obj["messageId"]), media_type="text/event-stream")
+
+    except Exception as e:
+        print(e)
+        return {"error": "Invalid JWT token"}
