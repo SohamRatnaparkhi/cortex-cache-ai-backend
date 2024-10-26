@@ -20,30 +20,43 @@ async def get_mem_based_on_chunk_id(chunk_id: str):
 async def full_text_search(query: str, metadata: dict, top_k: int = 10):
     try:
         filters = {}
+        # First normalize the keys
         for key, value in metadata.items():
-            if (key == 'user_id'):
+            if key == 'user_id':
                 key = 'userId'
-            if (key == 'mem_id'):
+            if key == 'mem_id':
                 key = 'memId'
+
             if isinstance(value, str):
-                filters[key] = value
+                filters[key] = {"equals": value}
             elif isinstance(value, list):
-                filters = {key: {"in": value}}
-            else:
-                continue
+                if value:  # Only add if list is not empty
+                    filters[key] = {"in": value}
 
-        filter_string = ""
-
-        for key in filters.keys():
-            filter_string += f'AND m."{key}" = \'{filters[key]}\' '
+        # Build the filter string with proper handling of both single values and arrays
+        filter_conditions = []
+        for key, condition in filters.items():
+            if "equals" in condition:
+                # For single string values
+                filter_conditions.append(
+                    f'm."{key}" = \'{condition["equals"]}\'')
+            elif "in" in condition:
+                # For array values - use ANY or = ANY syntax
+                placeholders = ', '.join(
+                    f"'{str(x)}'" for x in condition["in"])
+                filter_conditions.append(
+                    f'm."{key}" = ANY(ARRAY[{placeholders}])')
+        # Combine all conditions with AND
+        filter_string = " AND " + \
+            " AND ".join(filter_conditions) if filter_conditions else ""
 
         search_query = f"""
-        SELECT m."memId", m."chunkId", m."memData", ts_rank(msv.search_vector, plainto_tsquery('english', '{query}')) AS score
-        FROM "Memory" m
-        JOIN memory_search_vector msv ON m."memId" = msv."memid" AND m."chunkId" = msv."chunkid"
-        WHERE msv.search_vector @@ plainto_tsquery('english', '{query}') {filter_string}
-        ORDER BY score DESC
-        LIMIT {top_k}
+            SELECT m."memId", m."chunkId", m."memData", ts_rank(msv.search_vector, plainto_tsquery('english', '{query}')) AS score
+            FROM "Memory" m
+            JOIN memory_search_vector msv ON m."memId" = msv."memid" AND m."chunkId" = msv."chunkid"
+            WHERE msv.search_vector @@ plainto_tsquery('english', '{query}') {filter_string}
+            ORDER BY score DESC
+            LIMIT {top_k};
         """
         results = await prisma.query_raw(search_query)
         # print("_____------------_____")
