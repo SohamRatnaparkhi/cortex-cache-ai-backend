@@ -22,7 +22,7 @@ async def insert_memory_to_db(memory_data: dict):
     return memory
 
 
-async def insert_many_memories_to_db(memory_data: list, isCode=False):
+async def insert_many_memories_to_db(memory_data: list, isCode=False, preprocessed_chunks=[]):
     # memory_data = [sanitize_input(memory) for memory in memory_data]
     memories = await prisma.memory.create_many(data=memory_data)
     memory_ids = []
@@ -35,7 +35,25 @@ async def insert_many_memories_to_db(memory_data: list, isCode=False):
         JOINER = ' '
         CENTRAL_OPENER = ''
         CENTRAL_CLOSER = ''
-    for memory in memory_data:
+    data = []
+
+    i = 0
+    print(type(preprocessed_chunks))
+    for i in range(len(memory_data)):
+        if (i < len(preprocessed_chunks)):
+            data.append({
+                "memId": memory_data[i]["memId"],
+                "chunkId": memory_data[i]["chunkId"],
+                "memData": preprocessed_chunks[i]
+            })
+        else:
+            data.append({
+                "memId": memory_data[i]["memId"],
+                "chunkId": memory_data[i]["chunkId"],
+                "memData": memory_data[i]["memData"]
+            })
+
+    for memory in data:
         memory_ids.append(memory["memId"])
         chunk_ids.append(memory["chunkId"])
         filteredMemory = memory["memData"].replace(
