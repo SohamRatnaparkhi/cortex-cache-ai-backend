@@ -50,7 +50,11 @@ async def process_video(request: VideoRequest) -> AgentResponseWrapper:
 async def process_image(request: ImageRequest) -> dict:
     """Process  image, and transcribe."""
     try:
-        transcription = ImageService.get_image_transcript(request.video_id)
-        return transcription
+        transcription = await ImageService.get_image_transcript(
+            request.image_id, request.metadata)
+        print(transcription)
+        return AgentResponseWrapper(
+            response=transcription
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
