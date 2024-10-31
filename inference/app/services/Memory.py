@@ -3,7 +3,7 @@ from app.utils.Pinecone_query import pinecone_query
 from app.utils.Preprocessor import prepare_fulltext_query
 
 
-def get_semantic_search_results(original_query, refined_query, metadata, top_k=15, absolute_threshold=0.3):
+def get_semantic_search_results(original_query, refined_query, metadata, top_k=15, absolute_threshold=0.1):
     refined_query_semantic_res = pinecone_query(refined_query, metadata, top_k)
     original_query_semantic_res = pinecone_query(
         original_query, metadata, top_k)
@@ -103,16 +103,24 @@ async def get_final_results_from_memory(original_query, refined_query, metadata,
 
     fused_list = []
     if not len(original_query_semantic_res) == 0:
+        print("In here")
         fused_list.append(original_query_semantic_res)
 
     if not len(refined_query_semantic_res) == 0:
+        print("In here as well")
         fused_list.append(refined_query_semantic_res)
 
     if not len(original_query_full_text_res) == 0:
+        print("In here as well 2")
+        print("Fused list before appending: ", fused_list)
         fused_list.append(original_query_full_text_res)
 
     if not len(refined_query_full_text_res) == 0:
+        print("In here as well 3")
+        print("Fused list before appending: ", fused_list)
         fused_list.append(refined_query_full_text_res)
+
+    print("Fused list length: ", len(fused_list))
 
     fused_results = reciprocal_rank_fusion(fused_list, top_k)
 
