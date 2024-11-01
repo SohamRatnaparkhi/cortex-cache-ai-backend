@@ -24,12 +24,21 @@ summary_llm = ChatGroq(
     max_retries=5,
 )
 
-pro_query_llm = ChatGroq(
-    model="llama-3.2-3b-preview",
-    temperature=0.1,
-    max_tokens=1000,
-    timeout=None,
+# pro_query_llm = ChatGroq(
+#     model="llama-3.2-3b-preview",
+#     temperature=0.1,
+#     max_tokens=1000,
+#     timeout=None,
+#     max_retries=3,
+# )
+
+pro_query_llm = ChatOpenAI(
+    api_key=OPEN_API_KEY,
+    model_name="gpt-4o-mini",
     max_retries=3,
+    timeout=None,
+    temperature=0.7,
+    max_tokens=1800,
 )
 
 memory_search_query_llm = ChatGroq(
@@ -62,7 +71,7 @@ answer_llm_pro = ChatOpenAI(
     model_name="gpt-4o",
     max_retries=3,
     timeout=None,
-    temperature=0.7,
+    temperature=0.4,
     max_tokens=1800,
 )
 

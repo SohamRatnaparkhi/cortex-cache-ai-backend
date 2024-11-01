@@ -24,8 +24,14 @@ User Query: {original_query}
 Refined Query: {refined_query}
 
 Memory Data: Array of memory snippets with:
-- Content enclosed in <data> tags
+- Content enclosed in <content> tags
 - Relevance scores in <data_score> tags. Higher score indicates higher relevance.
+
+Example:
+<data>
+    <content>Some content</content>
+    <data_score>0.8</data_score>
+</data>
 
 Memory Data: {initial_answer}
 

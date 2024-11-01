@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
+from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GitSpecificMd, Metadata, NotionSpecificMd
 from app.utils.chunk_processing import update_chunks
@@ -51,10 +52,11 @@ class IntegrationAgent(ABC, Generic[T]):
             preprocessed_chunks = [
                 title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
-            embeddings = use_jina.get_embedding(preprocessed_chunks)
+            # embeddings = use_jina.get_embedding(preprocessed_chunks)
 
-            embeddings = [e["embedding"]
-                          for e in embeddings if "embedding" in e.keys()]
+            # embeddings = [e["embedding"]
+            #               for e in embeddings if "embedding" in e.keys()]
+            embeddings = voyage_client.get_embeddings(preprocessed_chunks)
             print("l2 = " + str(len(embeddings)))
 
             print(f"Embedding dimensions: {len(embeddings[0])}")

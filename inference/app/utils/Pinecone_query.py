@@ -1,6 +1,8 @@
 from typing import Any, Dict, List, Union
 
+from app.core import voyage_client
 from app.core.PineconeClient import PineconeClient
+from app.utils.app_logger_config import logger
 from app.utils.JinaUtils import get_embedding
 
 
@@ -37,12 +39,15 @@ def pinecone_query(query: str, metadata: dict, top_k: int = 15) -> List[Dict[str
         final_query = final_query if final_query[-1] not in [
             "]", "}"] else final_query[:-1]
         # print(f"Final query: {final_query}")
-        vectors_obj = get_embedding([final_query])
 
-        if not vectors_obj or not vectors_obj['data']:
-            print("No vectors returned")
-            return []
-        vectors = vectors_obj['data'][0]['embedding']
+        # vectors_obj = get_embedding([final_query])
+
+        # if not vectors_obj or not vectors_obj['data']:
+        #     print("No vectors returned")
+        #     return []
+        # vectors = vectors_obj['data'][0]['embedding']
+        embeddings = voyage_client.get_embeddings([final_query])
+        vectors = embeddings[0]
         res = pinecone_client.query(
             vector=vectors, top_k=top_k, filters=pinecone_filters)
         filtered_res = []
@@ -56,7 +61,7 @@ def pinecone_query(query: str, metadata: dict, top_k: int = 15) -> List[Dict[str
                 "chunkId": result.metadata['specific_desc_chunk_id'],
                 "memId": result.metadata['memId']
             })
-        print(
+        logger.info(
             f"pinecone returned {len(filtered_res)} results on query: {query}")
         return filtered_res
     except Exception as e:
@@ -119,7 +124,7 @@ def get_pinecone_filters(metadata: Dict[str, Any],
     final_filter = apply_advanced_filters(
         base_filter, range_filters, text_filters)
 
-    print(f"Generated Pinecone filters: {final_filter}")
+    logger.info(f"Generated Pinecone filters: {final_filter}")
     return final_filter
 
 

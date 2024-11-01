@@ -44,7 +44,6 @@ def improve_query(query: str, refined_query: str, context: str = "", wantToUpdat
         else:
             prompt = refined_query
 
-        print(f"Refining Prompt: {prompt}")
         improved_query = pro_query_llm.invoke(prompt)
         return improved_query.content
     except Exception as e:

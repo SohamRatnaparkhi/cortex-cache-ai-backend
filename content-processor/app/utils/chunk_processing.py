@@ -87,10 +87,6 @@ def get_context_summary_from_anthropic(context: str, sentences: List[str]) -> Ou
         ValueError: If not exactly 10 sentences are provided
     """
     try:
-        # Validate input
-        # if len(sentences) != 10:
-        #     raise ValueError(f"Expected 10 sentences, got {len(sentences)}")
-
         # Create the sentences XML block
         sentences_xml = "\n".join([
             f"    <sentence{i+1}> {sentence} </sentence{i+1}>"

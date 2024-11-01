@@ -12,12 +12,14 @@ from git import Union
 
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
+from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import (GitSpecificMd, Metadata, TextSpecificMd,
                                   YouTubeSpecificMd)
 from app.services.MemoryService import (insert_many_memories_to_db,
                                         insert_memory_to_db)
 from app.utils.AV import link_chunks_with_time
+from app.utils.chunk_processing import update_chunks
 from app.utils.Link import (extract_code_from_repo,
                             extract_transcript_from_youtube)
 from app.utils.Vectors import combine_data_chunks, get_vectors
@@ -54,10 +56,17 @@ class LinkAgent(ABC, Generic[T]):
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
             print("l1 = " + str(len(chunks)))
-            embeddings = use_jina.get_embedding(chunks)
+            title = self.md.title
+            description = self.md.description
+            preprocessed_chunks = update_chunks(chunks=chunks)
+            preprocessed_chunks = [
+                title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
-            embeddings = [e["embedding"]
-                          for e in embeddings if "embedding" in e.keys()]
+            # embeddings = use_jina.get_embedding(preprocessed_chunks)
+
+            # embeddings = [e["embedding"]
+            #               for e in embeddings if "embedding" in e.keys()]
+            embeddings = voyage_client.get_embeddings(preprocessed_chunks)
             print("l2 = " + str(len(embeddings)))
 
             print(f"Embedding dimensions: {len(embeddings[0])}")

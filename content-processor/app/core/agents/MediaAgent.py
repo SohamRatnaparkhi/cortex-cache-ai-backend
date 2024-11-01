@@ -11,6 +11,7 @@ from PyPDF2 import PdfReader
 
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
+from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import ImageSpecificMd, MediaSpecificMd, Metadata
 from app.services.MemoryService import (insert_many_memories_to_db,
@@ -49,14 +50,17 @@ class MediaAgent(ABC, Generic[T]):
             preprocessed_chunks = update_chunks(chunks=chunks)
             # print("l1.5 = " + str(len(preprocessed_chunks)))
 
-            embeddings = use_jina.get_embedding(preprocessed_chunks)
-            # print(embeddings)
-            # print(f"embeddings keys: {embeddings[0].keys()}")
-            # print(f"emb keys: {embeddings.keys()}")
-            # embeddings = [e["embedding"] for e in embeddings["data"]]
-            # print
-            embeddings = [e["embedding"]
-                          for e in embeddings if "embedding" in e.keys()]
+            title = self.md.title
+            description = self.md.description
+
+            preprocessed_chunks = [
+                title + " " + description + " " + chunk for chunk in preprocessed_chunks]
+
+            # embeddings = use_jina.get_embedding(preprocessed_chunks)
+
+            # embeddings = [e["embedding"]
+            #               for e in embeddings if "embedding" in e.keys()]
+            embeddings = voyage_client.get_embeddings(preprocessed_chunks)
             print("l2 = " + str(len(embeddings)))
 
             print(f"Embedding dimensions: {len(embeddings[0])}")
