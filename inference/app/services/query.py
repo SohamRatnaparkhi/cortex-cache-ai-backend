@@ -30,21 +30,17 @@ logger = logging.getLogger(__name__)
 async def user_query_service(query: QueryRequest, is_stream=False):
 
     message = query.query
-    number = query.number
-    logger.fatal(f"Initiated conversation for query: {message}")
+
+    metadata = query.metadata
+
+    title = metadata.get("title", "")
+    description = metadata.get("description", "")
+
     context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, limit=5)
-    print("Context found")
-    logger.info(f"Context: {context}")
-    # conversation_id = query.conversation_id
-    # messages = await prisma.message.find_many(where={"conversationId": conversation_id})
-    # logger.fatal(f"Conversation: {messages}")
-    if number is None:
-        number = 4
-    if number > 5:
-        number = 4
+
     updated_query = preprocess_query(message, context)
     prompt = generate_query_refinement_prompt(
-        context=query_only_context, query=message, refined_query=updated_query)
+        context=query_only_context, query=message, refined_query=updated_query, title=title, description=description)
     # logger.info(f"Prompt: {prompt}")
     return await process_single_query(query, context, is_stream, newQuery=prompt, conversationFound=conversationFound)
 

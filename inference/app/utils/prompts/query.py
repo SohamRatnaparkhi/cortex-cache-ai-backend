@@ -1,5 +1,10 @@
-def generate_query_refinement_prompt(query: str, context: str = "", refined_query: str = '') -> str:
+def generate_query_refinement_prompt(query: str, context: str = "", refined_query: str = '', title: str = '', description: str = '') -> str:
     context = context if context else ""
+    extra_desc = ""
+    if (title):
+        extra_desc += f"This query is related to a topic called title: {title}\n"
+    if (description):
+        extra_desc += f"Description: {description}\n"
     prompt = f"""
    # Query Refinement Task
 

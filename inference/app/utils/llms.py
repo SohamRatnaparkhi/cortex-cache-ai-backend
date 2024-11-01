@@ -26,7 +26,7 @@ summary_llm = ChatGroq(
 
 pro_query_llm = ChatGroq(
     model="llama-3.2-3b-preview",
-    temperature=0.7,
+    temperature=0.1,
     max_tokens=1000,
     timeout=None,
     max_retries=3,
@@ -34,7 +34,7 @@ pro_query_llm = ChatGroq(
 
 memory_search_query_llm = ChatGroq(
     model="llama-3.2-3b-preview",
-    temperature=0.4,
+    temperature=0.1,
     max_tokens=500,
     timeout=None,
     max_retries=3,

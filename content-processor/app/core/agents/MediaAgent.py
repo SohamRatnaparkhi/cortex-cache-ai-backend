@@ -4,6 +4,11 @@ from abc import ABC, abstractmethod
 from typing import Generic, List, TypeVar
 
 import pytesseract
+from PIL import Image
+from pinecone.control.pinecone import Pinecone
+from prisma.models import Memory
+from PyPDF2 import PdfReader
+
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
 from app.schemas.Common import AgentResponse
@@ -17,10 +22,6 @@ from app.utils.chunk_processing import update_chunks
 from app.utils.s3 import S3Operations
 from app.utils.Vectors import (combine_data_chunks, flatten_metadata,
                                get_vectors)
-from PIL import Image
-from pinecone.control.pinecone import Pinecone
-from prisma.models import Memory
-from PyPDF2 import PdfReader
 
 s3Opr = S3Operations()
 
@@ -357,7 +358,7 @@ class File_PDFAgent(MediaAgent):
             batch_size = 100
             for i in range(0, len(memories), batch_size):
                 batch = memories[i:i + batch_size]
-                await insert_many_memories_to_db(batch, preprocessed_chunks=preprocessed_chunks)
+                await insert_many_memories_to_db(batch, preprocessed_chunks=preprocessed_chunks[i: i + batch_size])
 
         except Exception as e:
             raise RuntimeError(

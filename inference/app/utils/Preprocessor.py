@@ -11,17 +11,6 @@ from spacy.lang.en.stop_words import STOP_WORDS
 
 from app.utils.llms import pro_query_llm
 
-# nltk.download('punkt')
-# nltk.download('stopwords')
-
-
-# class LLMOutput(BaseModel):
-#     refined_query: Union[str, List[str]] = Field(
-#         ..., description="The refined query as a string or list of words")
-
-
-# structured_llm = llm.with_structured_output(LLMOutput)
-
 
 def preprocess_query(query: str, context: str = "") -> str:
     # Convert to lowercase

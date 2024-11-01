@@ -38,7 +38,6 @@ async def insert_many_memories_to_db(memory_data: list, isCode=False, preprocess
     data = []
 
     i = 0
-    print(type(preprocessed_chunks))
     for i in range(len(memory_data)):
         if (i < len(preprocessed_chunks)):
             data.append({

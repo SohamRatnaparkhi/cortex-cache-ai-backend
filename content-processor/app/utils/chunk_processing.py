@@ -1,7 +1,9 @@
 import json
 import os
+import re
 import time
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -17,25 +19,31 @@ client = Anthropic(
 )
 
 BULK_CONTEXT_PROMPT = """
-You are tasked with providing context-aware descriptions for a set of text chunks. These descriptions will be used to build context-aware embeddings for a Retrieval-Augmented Generation (RAG) system. Your goal is to situate each chunk within the overall document to improve search retrieval.
+You are tasked with generating context-aware descriptions for text chunks to support contextual embeddings in a Retrieval-Augmented Generation (RAG) system. These descriptions will help improve search retrieval by situating each chunk within the overall document.
 
-You will be given two inputs:
+You will be given the following inputs:
 
-1. A context describing the overall document or topic:
+1. Overall Document Context: A brief description that encapsulates the theme or subject of the document.
 <context>
 {CONTEXT}
 </context>
 
-2. A set of sentences, each representing a chunk of text from the document:
+2. Chunked Text: A set of text snippets extracted from the document.
 <sentences>
 {sentences_xml}
 </sentences>
 
-For each of the sentences provided, you should:
+For each chunk, your responsibilities are as follows:
 
-1. Analyze the string in relation to the given context.
-2. Create a brief description that situates the chunk within the overall document or topic.
-3. Ensure the description provides enough context to improve search retrieval of the chunk.
+1. Contextual Analysis: Examine the chunk's relevance within the overall document context.
+2. Description Creation: Write a short, precise description of how the chunk relates to the document's main theme. Include important contextual elements such as section headings or key points, product names, etc. if applicable. 
+3. Search Relevance: Ensure the description will enhance the retrievability of this chunk for a search query.
+4. Restrict description to 3 to 4 sentences
+
+Improving Retrievability: Your descriptions should help the chunk surface during a search by:
+1. Keyword Enrichment: Include key terms or phrases that are likely to match user queries but are also contextually relevant to the chunk.
+2. Contextual Precision: Be specific about the chunk's subject matter, avoiding vague terms. This allows embeddings to capture distinct semantic meaning for more accurate search results.
+3. Relational Clues: If the chunk provides supporting information (like examples, definitions, or conclusions), ensure the description reflects this to aid in related query retrieval.
 
 Your output should be structured in JSON format, with each string as a key and its context-aware description as the value. Do not use any XML tags in your output.
 
@@ -135,19 +143,8 @@ def get_context_summary_from_anthropic(context: str, sentences: List[str]) -> Ou
 
         return OutputModelStructure.model_validate(res, strict=False)
     except Exception as e:
-        print(f"Error occurred while getting context summary 3: {e}")
-        return OutputModelStructure(
-            sentence1="",
-            sentence2="",
-            sentence3="",
-            sentence4="",
-            sentence5="",
-            sentence6="",
-            sentence7="",
-            sentence8="",
-            sentence9="",
-            sentence10=""
-        )
+        print(f"Error occurred while getting context summary: {e}")
+        return manual_parsing(len(sentences), res)
 
 
 def wait_for_n_seconds(n: int = 5) -> None:
@@ -186,3 +183,148 @@ def update_chunks(chunks: List[str]) -> List[str]:
     except Exception as e:
         print(f"Error occurred while updating chunks: {e}")
         return []
+
+
+@dataclass
+class ParsingResult:
+    value: str
+    success: bool
+    error: Optional[str] = None
+
+
+class ResponseParser:
+    @staticmethod
+    def clean_response(response: str) -> str:
+        """Clean and normalize the response string."""
+        if not response:
+            return ""
+        # Remove newlines and extra whitespace
+        cleaned = re.sub(r'\s+', ' ', response.strip())
+        # Remove any potential markdown code block markers
+        cleaned = re.sub(r'```(?:json)?\s*|\s*```', '', cleaned)
+        return cleaned
+
+    @staticmethod
+    def extract_json_like_string(response: str) -> str:
+        """Extract content between outermost curly braces."""
+        match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response)
+        return match.group(0) if match else response
+
+    @staticmethod
+    def parse_single_key(response: str, current_key: str) -> ParsingResult:
+        """
+        Parse a single key from the response string with improved error handling.
+
+        Args:
+            response: The full response string
+            current_key: The key to parse for (e.g., "sentence1")
+
+        Returns:
+            ParsingResult containing the parsed value and status information
+        """
+        try:
+            # Look for the key pattern with various quote styles
+            key_patterns = [
+                f'"{current_key}"\\s*:',
+                f"'{current_key}'\\s*:",
+                f"{current_key}\\s*:"
+            ]
+
+            # Find the start of the current key's value
+            start_index = -1
+            for pattern in key_patterns:
+                match = re.search(pattern, response)
+                if match:
+                    start_index = match.end()
+                    break
+
+            if start_index == -1:
+                return ParsingResult("", False, f"Key {current_key} not found")
+
+            # Extract the value until the next key or end of object
+            value_pattern = r'\s*"([^"\\]*(?:\\.[^"\\]*)*)"|\s*\'([^\'\\]*(?:\\.[^\'\\]*)*)\'|\s*([^,}\s][^,}]*)'
+            match = re.match(value_pattern, response[start_index:])
+
+            if not match:
+                return ParsingResult("", False, f"No valid value found for {current_key}")
+
+            # Get the matched value from whichever group succeeded
+            value = next((g for g in match.groups() if g is not None), "")
+
+            # Clean up the value
+            value = value.strip().strip('"\'').strip()
+
+            return ParsingResult(value, True)
+
+        except Exception as e:
+            return ParsingResult("", False, f"Error parsing {current_key}: {str(e)}")
+
+    @staticmethod
+    def parse_response(response: str, expected_sentences: int) -> Dict[str, str]:
+        """
+        Parse the entire response with fallback strategies.
+
+        Args:
+            response: The response string to parse
+            expected_sentences: Number of sentences to extract
+
+        Returns:
+            Dictionary mapping sentence keys to their values
+        """
+        result = {}
+
+        # Clean the response first
+        cleaned_response = ResponseParser.clean_response(response)
+
+        # Try parsing as JSON first
+        try:
+            result = json.loads(cleaned_response)
+            return result
+        except json.JSONDecodeError:
+            pass
+
+        # Extract content between curly braces if present
+        cleaned_response = ResponseParser.extract_json_like_string(
+            cleaned_response)
+
+        # Fallback to manual parsing
+        for i in range(expected_sentences):
+            current_key = f"sentence{i+1}"
+            parsing_result = ResponseParser.parse_single_key(
+                cleaned_response, current_key)
+
+            if parsing_result.success:
+                result[current_key] = parsing_result.value
+            else:
+                result[current_key] = ""  # Set empty string for failed parses
+
+        return result
+
+
+def manual_parsing(sentences_length: int, response: str) -> OutputModelStructure:
+    """
+    Improved manual parsing function with better error handling and robustness.
+
+    Args:
+        sentences_length: Number of sentences to parse
+        response: The response string to parse
+
+    Returns:
+        OutputModelStructure with parsed values
+    """
+    output = OutputModelStructure()
+
+    try:
+        # Parse the response
+        parsed_dict = ResponseParser.parse_response(response, sentences_length)
+
+        # Set attributes on the output model
+        for i in range(sentences_length):
+            current_key = f"sentence{i+1}"
+            value = parsed_dict.get(current_key, "")
+            setattr(output, current_key, value)
+
+    except Exception as e:
+        print(f"Error occurred during improved manual parsing: {e}")
+
+    return output
