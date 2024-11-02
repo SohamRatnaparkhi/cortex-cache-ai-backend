@@ -1,3 +1,6 @@
+import time
+import uuid
+
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.Common import AgentResponseWrapper
@@ -5,6 +8,7 @@ from app.schemas.Media import (AudioRequest, FileRequest, ImageRequest,
                                VideoRequest)
 from app.schemas.videos import ProcessVideo
 from app.services import AudioService, FileService, ImageService, VideoService
+from app.utils.app_logger_config import logger
 
 router = APIRouter(
     prefix='/file',
@@ -16,7 +20,12 @@ router = APIRouter(
 async def process_pdf(request: FileRequest) -> AgentResponseWrapper:
     """Process  pdf, and transcribe."""
     try:
+        req_id = str(uuid.uuid4())
+        logger.info(f"Processing PDF with request id: {req_id}")
+        start_time = time.time()
         transcription = await FileService.extract_text_from_pdf(request.file_id, request.metadata)
+        logger.info(
+            f"Request {req_id}  processed in {time.time() - start_time} seconds")
         return AgentResponseWrapper(
             response=transcription
         )

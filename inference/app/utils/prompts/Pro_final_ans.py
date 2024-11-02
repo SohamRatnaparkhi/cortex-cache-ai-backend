@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
@@ -43,6 +44,7 @@ Any established context or preferences
 Ongoing discussion threads or themes
 Chat Context: {context}
 
+- If required, consider today's date and time as: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 ## Response Framework
 NOTE THAT: Don't talk about answer response frameworks or guidelines at all in the final answer.
@@ -59,7 +61,7 @@ NOTE THAT: Don't talk about answer response frameworks or guidelines at all in t
 - [Links](https://...): Web links (if any)
 
 ## Core Rules
-1. Find the right balance between chat context and memories when both is provided
+1. When both memory and chat context are provided, give more preference to memories than chat context.. If the query is NOT RELATED TO A PERTICULAR CHAT CONTEXT ENTRY, THEN STRICTLY IGNORE IT. 
 2. No system/process mentions
 3. Keep the answer concise and to the point
 4. Don't talk about answer response frameworks or guidelines at all.

@@ -303,7 +303,7 @@ def update_chunks(chunks: List[str]) -> List[str]:
                     desc = output[f"sentence{j+1}"]
                     updated_chunks.append(f"{desc}. {sentences[j]}")
 
-                wait_for_n_seconds(1)
+                wait_for_n_seconds(5)
 
         # Create threads for anthropic and openai batches
         thread1 = threading.Thread(

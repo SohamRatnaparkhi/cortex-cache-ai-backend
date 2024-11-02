@@ -5,8 +5,6 @@ from typing import Generic, List, TypeVar
 
 import pytesseract
 from PIL import Image
-from pinecone.control.pinecone import Pinecone
-from prisma.models import Memory
 from PyPDF2 import PdfReader
 
 from app.core.jina_ai import use_jina
@@ -14,15 +12,13 @@ from app.core.PineconeClient import PineconeClient
 from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import ImageSpecificMd, MediaSpecificMd, Metadata
-from app.services.MemoryService import (insert_many_memories_to_db,
-                                        insert_memory_to_db)
+from app.services.MemoryService import insert_many_memories_to_db
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.chunk_processing import update_chunks
 # from app.utils.chunk_preprocessing import update_chunks
 from app.utils.s3 import S3Operations
-from app.utils.Vectors import (combine_data_chunks, flatten_metadata,
-                               get_vectors)
+from app.utils.Vectors import combine_data_chunks, get_vectors
 
 s3Opr = S3Operations()
 

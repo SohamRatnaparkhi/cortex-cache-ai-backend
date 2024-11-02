@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 def generate_query_refinement_prompt(query: str, context: str = "", refined_query: str = '', title: str = '', description: str = '') -> str:
     context = context if context else ""
     extra_desc = ""
@@ -18,6 +21,8 @@ You refine user queries for semantic search in a RAG system, prioritizing the la
 {title}
     - Shows user's previous queries, if available
     - Indicates user's information-seeking path if it aligns with the current query
+
+- If required, consider today's date and time as: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 ## Context Analysis
 Focus on the most recent query, unless it's a clear progression from previous queries. If the latest query diverges significantly:

@@ -29,7 +29,7 @@ async def user_query_service(query: QueryRequest, is_stream=False):
     title = metadata.get("title", "")
     description = metadata.get("description", "")
 
-    context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, limit=5)
+    context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, limit=2)
 
     updated_query = preprocess_query(message, context)
     prompt = generate_query_refinement_prompt(
