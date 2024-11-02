@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
 
+from app.utils.app_logger_config import logger
+
 load_dotenv()
 MAX_CHUNK_SIZE = 20
 CONTEXT_WINDOW_SIZE = 40
@@ -160,12 +162,12 @@ def get_context_summary_from_openai(context: str, sentences: List[str]) -> Outpu
             ],
         )
 
-        print(response.usage)
+        logger.debug(response.usage)
         res = response.choices[0].message.content.strip()
         res = res.replace("\n", "")
 
-        print("Response")
-        print(res)
+        logger.debug("Response")
+        logger.debug(res)
 
         # convert to json object
         res = json.loads(res)
@@ -234,13 +236,13 @@ def get_context_summary_from_anthropic(context: str, sentences: List[str]) -> Ou
             ],
             extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
         )
-        print(response.usage)
+        logger.debug(response.usage)
         res = response.content[0].text.strip()
         # remove all \n
         res = res.replace("\n", "")
 
-        print("Response")
-        # print(res)
+        logger.debug("Response")
+        logger.debug(res)
 
         # convert to json object
         res = json.loads(res)

@@ -8,6 +8,7 @@ from app.core.PineconeClient import PineconeClient
 from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GitSpecificMd, Metadata, NotionSpecificMd
+from app.utils.app_logger_config import logger
 from app.utils.chunk_processing import update_chunks
 from app.utils.Vectors import get_vectors
 
@@ -43,7 +44,7 @@ class IntegrationAgent(ABC, Generic[T]):
 
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
-            print("l1 = " + str(len(chunks)))
+            logger.debug("l1 = " + str(len(chunks)))
             preprocessed_chunks = update_chunks(chunks=chunks)
 
             title = self.md.title
@@ -57,19 +58,19 @@ class IntegrationAgent(ABC, Generic[T]):
             # embeddings = [e["embedding"]
             #               for e in embeddings if "embedding" in e.keys()]
             embeddings = voyage_client.get_embeddings(preprocessed_chunks)
-            print("l2 = " + str(len(embeddings)))
+            logger.debug("l2 = " + str(len(embeddings)))
 
-            print(f"Embedding dimensions: {len(embeddings[0])}")
+            logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
 
-            print(len(metadata))
-            print(len(vectors))
+            logger.debug(len(metadata))
+            logger.debug(len(vectors))
 
             batch_size = 100
             pinecone_client = PineconeClient()
             res = pinecone_client.upsert(vectors, batch_size)
-            print(res)
+            logger.debug(res)
             return preprocessed_chunks
         except Exception as e:
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")

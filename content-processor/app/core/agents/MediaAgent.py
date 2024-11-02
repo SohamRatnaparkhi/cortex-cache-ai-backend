@@ -13,6 +13,7 @@ from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import ImageSpecificMd, MediaSpecificMd, Metadata
 from app.services.MemoryService import insert_many_memories_to_db
+from app.utils.app_logger_config import logger
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.chunk_processing import update_chunks
@@ -41,10 +42,9 @@ class MediaAgent(ABC, Generic[T]):
 
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
-            print("l1 = " + str(len(chunks)))
+            logger.debug(f"Embedding and storing chunks: {len(chunks)}")
 
             preprocessed_chunks = update_chunks(chunks=chunks)
-            # print("l1.5 = " + str(len(preprocessed_chunks)))
 
             title = self.md.title
             description = self.md.description
@@ -57,9 +57,9 @@ class MediaAgent(ABC, Generic[T]):
             # embeddings = [e["embedding"]
             #               for e in embeddings if "embedding" in e.keys()]
             embeddings = voyage_client.get_embeddings(preprocessed_chunks)
-            print("l2 = " + str(len(embeddings)))
+            logger.debug(f"Length after embedding: {len(embeddings)}")
 
-            print(f"Embedding dimensions: {len(embeddings[0])}")
+            logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
 
@@ -67,7 +67,7 @@ class MediaAgent(ABC, Generic[T]):
             pinecone_client = PineconeClient()
             # pinecone_client.upsert_batch(vectors, batch_size)
             res = pinecone_client.upsert(vectors, batch_size)
-            print(res)
+            logger.debug(f"Upsert response: {res}")
             return preprocessed_chunks
         except Exception as e:
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")
@@ -212,11 +212,9 @@ class AudioAgent(MediaAgent):
 class ImageAgent(MediaAgent):
     async def process_media(self) -> AgentResponse:
         try:
-            print("Done 1")
             image_bytes = s3Opr.download_object(object_key=self.s3_media_key)
             image = Image.open(io.BytesIO(image_bytes))
             transcript = pytesseract.image_to_string(image)
-            print("Done 2")
             memId = str(uuid.uuid4())
             self.md.memId = memId
 
@@ -235,13 +233,11 @@ class ImageAgent(MediaAgent):
                 md_copy.specific_desc = md_v
                 metadata.append(md_copy)
                 chunk_id += 1
-            print("Done 3")
             if not chunks:
                 chunks = [transcript]
 
             await self.store_memory_in_database(chunks, metadata, memId)
             await self.embed_and_store_chunks(chunks, metadata)
-            print("Done 4")
             response = AgentResponse(
                 transcript=transcript,
                 chunks=chunks,
@@ -366,11 +362,5 @@ class File_PDFAgent(MediaAgent):
 
 
 def sanitize_input(data: str) -> str:
-    # Replace NUL characters
-    # try:
-    #     sanitized_data = {key: value.replace(
-    #         '\x00', '') for key, value in data.items()}
-    # except Exception as e:
-    #     sanitized_data = data
     sanitized_data = data.replace('\x00', '')
     return sanitized_data

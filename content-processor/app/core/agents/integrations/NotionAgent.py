@@ -7,6 +7,7 @@ from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import NotionSpecificMd
 from app.services.MemoryService import insert_many_memories_to_db
 from app.services.NotionPageExtractor import NotionTextExtractor
+from app.utils.app_logger_config import logger
 
 
 class NotionAgent(IntegrationAgent[NotionSpecificMd]):
@@ -18,7 +19,7 @@ class NotionAgent(IntegrationAgent[NotionSpecificMd]):
         # Process the Notion page and get text from it
         content = NotionTextExtractor(page_id, access_token).get_page_content()
 
-        print(f"Content: {content}")
+        logger.debug(f"Content: {content}")
 
         chunks = use_jina.segment_data(content)
 
