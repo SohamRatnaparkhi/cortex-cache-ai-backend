@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -154,8 +155,8 @@ def get_context_summary_from_openai(context: str, sentences: List[str]) -> Outpu
             model="gpt-4o-mini",
             temperature=0.0,
             messages=[
-                {"role": "user", "content": prompt},
                 {"role": "user", "content": EXAMPLE},
+                {"role": "user", "content": prompt},
             ],
         )
 
@@ -164,7 +165,7 @@ def get_context_summary_from_openai(context: str, sentences: List[str]) -> Outpu
         res = res.replace("\n", "")
 
         print("Response")
-        # print(res)
+        print(res)
 
         # convert to json object
         res = json.loads(res)
@@ -173,7 +174,7 @@ def get_context_summary_from_openai(context: str, sentences: List[str]) -> Outpu
 
         # return res if res != None else manual_parsing(len(sentences), res)
     except Exception as e:
-        print(f"Error occurred while getting context summary: {e}")
+        print(f"Error occurred while getting context summary from openai: {e}")
         return manual_parsing(len(sentences), res)
 
 
@@ -213,6 +214,7 @@ def get_context_summary_from_anthropic(context: str, sentences: List[str]) -> Ou
         response = anthropic_client.beta.prompt_caching.messages.create(
             model="claude-3-haiku-20240307",
             temperature=0.0,
+            max_tokens=1024,
             messages=[
                 {
                     "role": "user",
@@ -262,24 +264,61 @@ def update_chunks(chunks: List[str]) -> List[str]:
         NEXT = 30
         CURRENT = 10
 
+        # Split the chunks into batches for anthropic and openai
+        anthropic_batches = []
+        openai_batches = []
+
         for i in range(0, len(chunks), CURRENT):
             start = max(0, i - PREVIOUS)
             end = min(len(chunks), i + CURRENT + NEXT)
-            context_chunks = chunks[start:end]
-            context_text = ",\n".join(context_chunks)
-            sentences = chunks[i:i+CURRENT]
-            output = get_context_summary_from_openai(
-                context_text, sentences)
+            batch = {
+                'start': start,
+                'end': end,
+                'current_start': i,
+                'current_end': i + CURRENT
+            }
+            if (i // CURRENT) % 2 == 0:
+                anthropic_batches.append(batch)
+            else:
+                openai_batches.append(batch)
 
-            print("Received")
-            output = output.model_dump()
-            print(output)
+        def process_batches(batches, model):
+            for batch in batches:
+                context_chunks = chunks[batch['start']:batch['end']]
+                context_text = ",\n".join(context_chunks)
+                sentences = chunks[batch['current_start']:batch['current_end']]
 
-            for j in range(len(sentences)):
-                desc = output[f"sentence{j+1}"]
-                updated_chunks.append(f"{desc}. {sentences[j]}")
+                if model == 'openai':
+                    output = get_context_summary_from_openai(
+                        context_text, sentences)
+                elif model == 'anthropic':
+                    output = get_context_summary_from_anthropic(
+                        context_text, sentences)
+                else:
+                    raise ValueError("Unknown model")
 
-            wait_for_n_seconds(1)
+                output = output.model_dump()
+
+                for j in range(len(sentences)):
+                    desc = output[f"sentence{j+1}"]
+                    updated_chunks.append(f"{desc}. {sentences[j]}")
+
+                wait_for_n_seconds(1)
+
+        # Create threads for anthropic and openai batches
+        thread1 = threading.Thread(
+            target=process_batches, args=(anthropic_batches, 'anthropic'))
+        thread2 = threading.Thread(
+            target=process_batches, args=(openai_batches, 'openai'))
+
+        # Start the threads
+        thread1.start()
+        thread2.start()
+
+        # Wait for both threads to finish
+        thread1.join()
+        thread2.join()
+
         print("Updated chunks length - " + str(len(updated_chunks)))
         return updated_chunks
     except Exception as e:
