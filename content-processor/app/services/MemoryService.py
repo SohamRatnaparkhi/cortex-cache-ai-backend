@@ -22,29 +22,49 @@ async def insert_memory_to_db(memory_data: dict):
     return memory
 
 
-async def insert_many_memories_to_db(memory_data: list, isCode=False):
+async def insert_many_memories_to_db(memory_data: list, isCode=False, preprocessed_chunks=[]):
     # memory_data = [sanitize_input(memory) for memory in memory_data]
-    memories = await prisma.memory.create_many(data=memory_data)
-    memory_ids = []
-    chunk_ids = []
-    filtered_meta_data = []
-    JOINER = '<joiner>'
-    CENTRAL_OPENER = '<central>'
-    CENTRAL_CLOSER = '</central>'
-    if isCode:
-        JOINER = ' '
-        CENTRAL_OPENER = ''
-        CENTRAL_CLOSER = ''
-    for memory in memory_data:
-        memory_ids.append(memory["memId"])
-        chunk_ids.append(memory["chunkId"])
-        filteredMemory = memory["memData"].replace(
-            CENTRAL_OPENER, "").replace(CENTRAL_CLOSER, "").replace(JOINER, "")
-        filtered_meta_data.append(filteredMemory)
+    try:
+        memories = await prisma.memory.create_many(data=memory_data)
+        memory_ids = []
+        chunk_ids = []
+        filtered_meta_data = []
+        JOINER = '<joiner>'
+        CENTRAL_OPENER = '<central>'
+        CENTRAL_CLOSER = '</central>'
+        if isCode:
+            JOINER = ' '
+            CENTRAL_OPENER = ''
+            CENTRAL_CLOSER = ''
+        data = []
 
-    await update_search_vectors(memory_ids, chunk_ids, filtered_meta_data)
-    return memories
+        i = 0
+        for i in range(len(memory_data)):
+            if (i < len(preprocessed_chunks)):
+                data.append({
+                    "memId": memory_data[i]["memId"],
+                    "chunkId": memory_data[i]["chunkId"],
+                    "memData": preprocessed_chunks[i]
+                })
+            else:
+                data.append({
+                    "memId": memory_data[i]["memId"],
+                    "chunkId": memory_data[i]["chunkId"],
+                    "memData": memory_data[i]["memData"]
+                })
 
+        for memory in data:
+            memory_ids.append(memory["memId"])
+            chunk_ids.append(memory["chunkId"])
+            filteredMemory = memory["memData"].replace(
+                CENTRAL_OPENER, "").replace(CENTRAL_CLOSER, "").replace(JOINER, "")
+            filtered_meta_data.append(filteredMemory)
+
+        await update_search_vectors(memory_ids, chunk_ids, filtered_meta_data)
+        return memories
+    except Exception as e:
+        print(f"Error inserting many memories: {e}")
+        return -1
 
 load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')

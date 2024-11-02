@@ -42,6 +42,11 @@ class TextSpecificMd(BaseModel):
     url: str
 
 
+class NotionSpecificMd(BaseModel):
+    chunk_id: str
+    page_id: str
+
+
 class MindMapSpecificMd(BaseModel):
     memory_count: int
     central_topic: str

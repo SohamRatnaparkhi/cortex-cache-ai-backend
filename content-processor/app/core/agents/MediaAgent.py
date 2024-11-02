@@ -5,21 +5,21 @@ from typing import Generic, List, TypeVar
 
 import pytesseract
 from PIL import Image
-from pinecone.control.pinecone import Pinecone
-from prisma.models import Memory
 from PyPDF2 import PdfReader
 
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
+from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import ImageSpecificMd, MediaSpecificMd, Metadata
-from app.services.MemoryService import (insert_many_memories_to_db,
-                                        insert_memory_to_db)
+from app.services.MemoryService import insert_many_memories_to_db
+from app.utils.app_logger_config import logger
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
+from app.utils.chunk_processing import update_chunks
+# from app.utils.chunk_preprocessing import update_chunks
 from app.utils.s3 import S3Operations
-from app.utils.Vectors import (combine_data_chunks, flatten_metadata,
-                               get_vectors)
+from app.utils.Vectors import combine_data_chunks, get_vectors
 
 s3Opr = S3Operations()
 
@@ -42,18 +42,24 @@ class MediaAgent(ABC, Generic[T]):
 
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
-            print("l1 = " + str(len(chunks)))
-            embeddings = use_jina.get_embedding(chunks)
-            # print(embeddings)
-            # print(f"embeddings keys: {embeddings[0].keys()}")
-            # print(f"emb keys: {embeddings.keys()}")
-            # embeddings = [e["embedding"] for e in embeddings["data"]]
-            # print
-            embeddings = [e["embedding"]
-                          for e in embeddings if "embedding" in e.keys()]
-            print("l2 = " + str(len(embeddings)))
+            logger.debug(f"Embedding and storing chunks: {len(chunks)}")
 
-            print(f"Embedding dimensions: {len(embeddings[0])}")
+            preprocessed_chunks = update_chunks(chunks=chunks)
+
+            title = self.md.title
+            description = self.md.description
+
+            preprocessed_chunks = [
+                title + " " + description + " " + chunk for chunk in preprocessed_chunks]
+
+            # embeddings = use_jina.get_embedding(preprocessed_chunks)
+
+            # embeddings = [e["embedding"]
+            #               for e in embeddings if "embedding" in e.keys()]
+            embeddings = voyage_client.get_embeddings(preprocessed_chunks)
+            logger.debug(f"Length after embedding: {len(embeddings)}")
+
+            logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
 
@@ -61,8 +67,8 @@ class MediaAgent(ABC, Generic[T]):
             pinecone_client = PineconeClient()
             # pinecone_client.upsert_batch(vectors, batch_size)
             res = pinecone_client.upsert(vectors, batch_size)
-            print(res)
-            return
+            logger.debug(f"Upsert response: {res}")
+            return preprocessed_chunks
         except Exception as e:
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")
 
@@ -209,7 +215,6 @@ class ImageAgent(MediaAgent):
             image_bytes = s3Opr.download_object(object_key=self.s3_media_key)
             image = Image.open(io.BytesIO(image_bytes))
             transcript = pytesseract.image_to_string(image)
-
             memId = str(uuid.uuid4())
             self.md.memId = memId
 
@@ -218,20 +223,21 @@ class ImageAgent(MediaAgent):
             chunk_id = 0
             for _ in chunks:
                 md_copy = self.md.model_copy()
-                md_v = MediaSpecificMd(
+                md_v = ImageSpecificMd(
                     chunk_id=f"{memId}_{chunk_id}",
                     type='image',
+                    width=image.width or 0,
+                    height=image.height or 0,
+                    format=image.format or ""
                 )
                 md_copy.specific_desc = md_v
                 metadata.append(md_copy)
                 chunk_id += 1
-
             if not chunks:
                 chunks = [transcript]
 
             await self.store_memory_in_database(chunks, metadata, memId)
             await self.embed_and_store_chunks(chunks, metadata)
-
             response = AgentResponse(
                 transcript=transcript,
                 chunks=chunks,
@@ -313,8 +319,8 @@ class File_PDFAgent(MediaAgent):
                 md_copy.specific_desc = md_v
                 metadata.append(md_copy)
 
-            await self.store_memory_in_database(chunks, metadata, memId)
-            await self.embed_and_store_chunks(chunks, metadata)
+            preprocessed_chunks = await self.embed_and_store_chunks(chunks, metadata)
+            await self.store_memory_in_database(chunks, preprocessed_chunks, metadata, memId)
 
             response = AgentResponse(
                 transcript=full_text,
@@ -325,7 +331,7 @@ class File_PDFAgent(MediaAgent):
         except Exception as e:
             raise RuntimeError(f"Error processing PDF: {str(e)}")
 
-    async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], memId: str) -> None:
+    async def store_memory_in_database(self, chunks: List[str], preprocessed_chunks: List[str], metadata: List[Metadata], memId: str) -> None:
         try:
             memories = []
             combined_chunks = combine_data_chunks(chunks, metadata, memId)
@@ -348,7 +354,7 @@ class File_PDFAgent(MediaAgent):
             batch_size = 100
             for i in range(0, len(memories), batch_size):
                 batch = memories[i:i + batch_size]
-                await insert_many_memories_to_db(batch)
+                await insert_many_memories_to_db(batch, preprocessed_chunks=preprocessed_chunks[i: i + batch_size])
 
         except Exception as e:
             raise RuntimeError(
@@ -356,11 +362,5 @@ class File_PDFAgent(MediaAgent):
 
 
 def sanitize_input(data: str) -> str:
-    # Replace NUL characters
-    # try:
-    #     sanitized_data = {key: value.replace(
-    #         '\x00', '') for key, value in data.items()}
-    # except Exception as e:
-    #     sanitized_data = data
     sanitized_data = data.replace('\x00', '')
     return sanitized_data

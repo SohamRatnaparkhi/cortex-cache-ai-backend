@@ -39,6 +39,7 @@ class JinaAIClient():
             headers["Accept"] = "application/json"
             headers.pop("Content-Type")
             headers["X-Remove-Selector"] = "img, a"
+            headers["X-Timeout"] = "60"
         return headers
 
     def get(self, endpoint=''):

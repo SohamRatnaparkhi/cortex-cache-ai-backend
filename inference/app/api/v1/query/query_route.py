@@ -38,14 +38,10 @@ async def stream_llm_response(query: QueryRequest, request: Request):
     try:
         # get Authorization header
         header = request.headers.get("Authorization")
-        print(f"Authorization header: {header}")
-
         # decode jwt token
         (userId, emailId, apiKey) = get_credentials(header)
 
         query.user_id = userId
-        # print("reached")
-        print(query)
         obj = await user_query_service(query, is_stream=True)
         return StreamingResponse(stream_response(obj["prompt"], obj["messageId"]), media_type="text/event-stream")
 

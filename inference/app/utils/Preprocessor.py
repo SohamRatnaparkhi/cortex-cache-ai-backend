@@ -9,18 +9,7 @@ from nltk.tokenize import word_tokenize
 from pydantic import BaseModel, Field
 from spacy.lang.en.stop_words import STOP_WORDS
 
-from app.utils.llms import pro_query_llm as llm
-
-# nltk.download('punkt')
-# nltk.download('stopwords')
-
-
-class LLMOutput(BaseModel):
-    refined_query: Union[str, List[str]] = Field(
-        ..., description="The refined query as a string or list of words")
-
-
-structured_llm = llm.with_structured_output(LLMOutput)
+from app.utils.llms import pro_query_llm
 
 
 def preprocess_query(query: str, context: str = "") -> str:
@@ -55,9 +44,8 @@ def improve_query(query: str, refined_query: str, context: str = "", wantToUpdat
         else:
             prompt = refined_query
 
-        print(f"Refining Prompt: {prompt}")
-        improved_query = structured_llm.invoke(prompt)
-        return improved_query.refined_query
+        improved_query = pro_query_llm.invoke(prompt)
+        return improved_query.content
     except Exception as e:
         print(f"Error in improve_query: {str(e)}")
         return query

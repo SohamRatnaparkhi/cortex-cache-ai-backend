@@ -1,58 +1,57 @@
-def generate_query_refinement_prompt(query: str, context: str = "", refined_query: str = '') -> str:
-    context = context if context else ""
-    prompt = f"""
-   # Query Refinement Task
+from datetime import datetime
 
-You refine user queries for semantic search in a RAG system, considering current and previous user queries.
+
+def generate_query_refinement_prompt(query: str, context: str = "", refined_query: str = '', title: str = '', description: str = '') -> str:
+    context = context if context else ""
+    extra_desc = ""
+    if (title):
+        extra_desc += f"- This query is related to a topic called title: {title}\n"
+    if (description):
+        extra_desc += f"- Description: {description}\n"
+    prompt = f"""
+    # Query Refinement Task
+
+You refine user queries for semantic search in a RAG system, prioritizing the latest user query while considering previous queries if relevant.
 
 ## Input
 - Current Query: {query}
 - Keywords: {refined_query if refined_query else "N/A"}
 - Chat Context: {context if context else "N/A"}
-    - Contains user's previous queries only
-    - Shows user's information seeking path
-    - Reveals user's topic progression
+{extra_desc}
+{title}
+    - Shows user's previous queries, if available
+    - Indicates user's information-seeking path if it aligns with the current query
+
+- If required, consider today's date and time as: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 ## Context Analysis
-Extract from previous queries:
-- User's main topics of interest
-- Question progression
-- Key terms used
-- Specific references
-- Search patterns
+Focus on the most recent query, unless it's a clear progression from previous queries. If the latest query diverges significantly:
+- Give full priority to the current query
+- Ignore unrelated past context
+
+Otherwise, when previous queries are related:
+- Identify user's main topics of interest
+- Trace question progression and key terms
+- Understand search patterns
 
 ## Query Guidelines
 For short queries (<10 words):
-- Expand using context from previous queries
-- Connect to user's earlier questions
-- Build on established search intent
-- Create 15-25 word natural query
-- Include recurring concepts
+- Expand using the current query and relevant past context
+- If unrelated, build entirely on the current query
+- Create a 15-25 word natural query that matches the search intent
 
 For long queries (≥10 words):
-- Extract core intent
-- Keep concepts from related previous queries
-- Maintain search direction
-- Create 10-20 word focused query
-- Preserve key user terms
-
-## Contextual Integration
-- Build on previous search intent
-- Use terms consistent with user's vocabulary
-- Consider question sequence
-- Connect related queries
-- Resolve ambiguous terms
-
-## Format
-Return the refined query here without any headings or anything else. Directly start with the refined query.
+- Extract core intent from the current query first
+- Only integrate previous queries if they align
+- Focus on refining the main topic and clarifying any ambiguous terms
 
 ## Output Rules
 - No explanations
 - No bullet points
-- No additional text
-- Just the refined query with prefix
+- Directly return the refined query with clear user intent
+- Prioritize the current query if unrelated
 
-Remember: Create one clear, search-optimized sentence that builds on user's previous queries and current intent.
+Remember: Create one clear, search-optimized sentence that builds on user's previous queries and current intent. Don't include any additional context or explanations. Strictly focus on refining the query for semantic search in a RAG system and return it.
 """
     return prompt
 

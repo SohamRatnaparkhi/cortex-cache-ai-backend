@@ -1,140 +1,134 @@
 import asyncio
 import json
-import logging
 import re
 import time
 from typing import AsyncIterator, Dict
 
 from langchain.schema import HumanMessage
 
-from app.prisma import prisma as prisma_mod
 from app.prisma.prisma import get_all_mems_based_on_chunk_ids, prisma
 from app.schemas.query.ApiModel import QueryRequest
 from app.services.Memory import get_final_results_from_memory
 from app.services.messages import insert_message_in_db
+from app.utils.app_logger_config import logger
 from app.utils.llms import answer_llm_pro as llm
-from app.utils.Pinecone_query import pinecone_query
-from app.utils.Preprocessor import (improve_query, prepare_fulltext_query,
-                                    preprocess_query)
+from app.utils.Preprocessor import improve_query, preprocess_query
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
 from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
                                              get_final_pro_answer_prompt)
 from app.utils.prompts.query import generate_query_refinement_prompt
 from app.utils.prompts.ResponseScoring import scoring_prompt
 
-# Add this near the top of the file
-logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.INFO)
-
 
 async def user_query_service(query: QueryRequest, is_stream=False):
 
     message = query.query
-    number = query.number
-    logger.fatal(f"Initiated conversation for query: {message}")
-    context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, limit=5)
-    print("Context found")
-    logger.info(f"Context: {context}")
-    # conversation_id = query.conversation_id
-    # messages = await prisma.message.find_many(where={"conversationId": conversation_id})
-    # logger.fatal(f"Conversation: {messages}")
-    if number is None:
-        number = 4
-    if number > 5:
-        number = 4
+
+    metadata = query.metadata
+
+    title = metadata.get("title", "")
+    description = metadata.get("description", "")
+
+    context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, limit=2)
+
     updated_query = preprocess_query(message, context)
     prompt = generate_query_refinement_prompt(
-        context=query_only_context, query=message, refined_query=updated_query)
-    # logger.info(f"Prompt: {prompt}")
+        context=query_only_context, query=message, refined_query=updated_query, title=title, description=description)
     return await process_single_query(query, context, is_stream, newQuery=prompt, conversationFound=conversationFound)
 
 
 async def process_single_query(query: QueryRequest, context: str, is_stream=False, newQuery="", conversationFound=False, query_only_context: str = "") -> Dict:
-
     try:
+        start_time = time.time()
         message = query.query
         metadata = query.metadata
         refined_query = newQuery
         is_pro = query.is_pro
-        start_time = time.time()
-        logger.info(
-            f"Improving llm query now with {message} and {refined_query}")
 
-        query_context = query_only_context if query_only_context != "" else context
+        logger.debug(
+            f"Improving LLM query with message: '{message}' and refined_query: '{refined_query}'")
+
+        query_context = query_only_context if query_only_context else context
 
         llm_query = improve_query(message, refined_query, query_context)
-        print("Improved query: ", llm_query)
-        logger.info(f"Improved query: {llm_query}")
-        logger.info(
+        logger.info(f"Improved LLM query: {llm_query}")
+        logger.debug(
             f"Improve query time: {time.time() - start_time:.4f} seconds")
-        logger.info(f"LLM query: {llm_query}")
+
         pinecone_start = time.time()
-        # combined_results = pinecone_query(llm_query, metadata)
         combined_results = await get_final_results_from_memory(
-            original_query=message, refined_query=llm_query, metadata=metadata, max_results=10, top_k=15)
-        logger.info(
+            original_query=message,
+            refined_query=llm_query,
+            metadata=metadata,
+            max_results=10,
+            top_k=15
+        )
+        logger.debug(
             f"Pinecone query time: {time.time() - pinecone_start:.4f} seconds")
 
-        # print("pinecone result: ", combined_results)
-        # print("Combined results: ", combined_results[0])
         chunk_ids = [res['chunkId'] for res in combined_results]
-        memIds = [res['memId'] for res in combined_results]
+        mem_ids = [res['memId'] for res in combined_results]
 
-        # Store message in the conversation in the database
-        logger.info("Inserting message in the database")
-        message = await insert_message_in_db(query_id=query.query_id, chunk_ids=list(set(chunk_ids)), memIds=list(set(memIds)), user_id=query.user_id, conversation_id=query.conversation_id,  user_query=query.query, conversationFound=conversationFound, content=message)
-        logger.info("Message inserted in the database")
+        logger.info("Inserting message into the database")
+        message = await insert_message_in_db(
+            query_id=query.query_id,
+            chunk_ids=list(set(chunk_ids)),
+            memIds=list(set(mem_ids)),
+            user_id=query.user_id,
+            conversation_id=query.conversation_id,
+            user_query=query.query,
+            conversationFound=conversationFound,
+            content=message
+        )
+        logger.info("Message inserted into the database")
+
         mem_data_start = time.time()
         mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
-        logger.info(
+        logger.debug(
             f"Get memory data time: {time.time() - mem_data_start:.4f} seconds")
 
         complete_data_start = time.time()
-        complete_data = ""
+        min_length = min(len(chunk_ids), len(mem_data),
+                         len(mem_ids), len(combined_results))
         ans_list = []
+
         logger.info(
-            f'Citations received: {len(chunk_ids)} == {len(mem_data)} == {len(memIds)} == {len(combined_results)}')
-        min_l = min(len(chunk_ids), len(mem_data),
-                    len(memIds), len(combined_results))
-        for i in range(min_l):
+            f'Citations received: {len(chunk_ids)} == {len(mem_data)} == {len(mem_ids)} == {len(combined_results)}')
+
+        data_entries = []
+        for i in range(min_length):
+            res = combined_results[i]
+            mem = mem_data[i]
             current_ans = {
                 "chunk_id": chunk_ids[i],
-                "score": [res['score'] for res in combined_results][i],
-                "mem_data": [mem.memData for mem in mem_data][i],
-                "memId": memIds[i]
+                "score": res['score'],
+                "mem_data": mem.memData,
+                "memId": mem_ids[i]
             }
-            complete_data += f"<data><content>{current_ans['mem_data']}</content>"
-            complete_data += f"<data_score>{current_ans['score']}</data_score>"
-            # complete_data += f"<cite>{chunk_ids[i]}</cite></data>"
+            data_entries.append(
+                f"<data>\n\t<content>{current_ans['mem_data']}</content>\n\t<data_score>{current_ans['score']}</data_score>\n</data>\n"
+            )
             ans_list.append(current_ans)
 
-        complete_data = f"<question>{llm_query}</question>" + complete_data
-        logger.info(
+        complete_data = f"<question>{llm_query}</question>\n{''.join(data_entries)}"
+        logger.debug(
             f"Build complete data time: {time.time() - complete_data_start:.4f} seconds")
         logger.info(f"Message: {message}")
+
         final_ans_start = time.time()
-        final_ans = ""
-        # full_text_query1 = prepare_fulltext_query(query.query)
-        # full_text_query2 = prepare_fulltext_query(llm_query)
 
-        # full_text_res1 = await prisma_mod.full_text_search(full_text_query1, 10)
-        # full_text_res2 = await prisma_mod.full_text_search(full_text_query2, 10)
-
-        # intersection = set(full_text_res1).intersection(set(full_text_res2))
-
-        # print('____-----------_____')
-
-        # print(full_text_res1)
-        # print(full_text_res2)
-
-        # print('____-----------_____')
-        # logger.info(complete_data)
         if is_pro:
             if is_stream:
                 return {
                     "curr_ans": complete_data,
                     "query": llm_query,
-                    "prompt": get_final_pro_answer_prompt(query.query, llm_query, context, complete_data, is_stream=True),
+                    "prompt": get_final_pro_answer_prompt(
+                        original_query=query.query,
+                        refined_query=llm_query,
+                        context=context,
+                        initial_answer=complete_data,
+                        is_stream=True
+                    ),
                     "messageId": message.id
                 }
             final_ans = get_final_pro_answer(
@@ -148,24 +142,22 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
                     "messageId": message.id
                 }
             final_ans = get_final_answer(complete_data)
-        logger.info(
-            f"Get final answer time: {time.time() - final_ans_start:.4f} seconds")
 
-        logger.info(
+        logger.debug(
+            f"Get final answer time: {time.time() - final_ans_start:.4f} seconds")
+        logger.debug(
             f"Total process_single_query time: {time.time() - start_time:.4f} seconds")
 
         result = {
             "query": llm_query,
             "final_ans": convert_newlines(final_ans.content),
-            "messageId": message.id,
+            "messageId": message.id
         }
-
         return result
+
     except Exception as e:
-        print(f"Error in process_single_query: {str(e)}")
-        return {
-            "error": str(e)
-        }
+        logger.error(f"Error in process_single_query: {str(e)}")
+        return {"error": str(e)}
 
 
 async def user_multi_query_service2(query: QueryRequest):
@@ -212,7 +204,7 @@ async def stream_response(prompt: str, messageId: str) -> AsyncIterator[str]:
     # "got the prompt"
     message_content = ""
     message_id_sent = False
-    logger.info(f"Streaming response with prompt: {prompt}")
+    logger.debug(f"Streaming response with prompt: {prompt}")
     try:
         async for chunk in llm.astream([HumanMessage(content=prompt)]):
             # print(chunk.content, end="")
@@ -271,7 +263,6 @@ def convert_newlines(text):
 
 async def get_chat_context(conversation_id: str, limit=2):
     try:
-        # print("IN 1")
         messages = await prisma.message.find_many(
             where={
                 "conversationId": conversation_id
@@ -281,8 +272,6 @@ async def get_chat_context(conversation_id: str, limit=2):
             })
         queryIds = set()
         for message in messages:
-            # print(f"Message sender: {message.sender}, id: {message.id}")
-            # print(f"Message content: {message.content}")
             if message.sender != "ai":
                 queryIds.add(message.id)
             if len(queryIds) == limit:
@@ -292,17 +281,14 @@ async def get_chat_context(conversation_id: str, limit=2):
         context = {}
         for message in messages:
             if message.id in queryIds:
-                print(f"Message id: {message.id}")
                 context[message.id] = {
                     "user": message.content
                 }
             if message.questionId in queryIds:
-                print(f"Question id: {message.questionId}")
                 if (message.questionId not in context):
                     context[message.questionId] = {}
                 context[message.questionId]["ai"] = message.content
 
-        # print(context)
         query_only_context = ""
         for key in context.keys():
             query_only_context = f"{context[key]['user']}, " + \

@@ -12,12 +12,14 @@ from git import Union
 
 from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
+from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import (GitSpecificMd, Metadata, TextSpecificMd,
                                   YouTubeSpecificMd)
 from app.services.MemoryService import (insert_many_memories_to_db,
                                         insert_memory_to_db)
 from app.utils.AV import link_chunks_with_time
+from app.utils.chunk_processing import update_chunks
 from app.utils.Link import (extract_code_from_repo,
                             extract_transcript_from_youtube)
 from app.utils.Vectors import combine_data_chunks, get_vectors
@@ -53,29 +55,31 @@ class LinkAgent(ABC, Generic[T]):
 
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
-            print("l1 = " + str(len(chunks)))
-            embeddings = use_jina.get_embedding(chunks)
-            # print(embeddings)
-            # print(f"embeddings keys: {embeddings[0].keys()}")
-            # print(f"emb keys: {embeddings.keys()}")
-            # embeddings = [e["embedding"] for e in embeddings["data"]]
-            # print
-            embeddings = [e["embedding"]
-                          for e in embeddings if "embedding" in e.keys()]
-            print("l2 = " + str(len(embeddings)))
+            logger.debug("l1 = " + str(len(chunks)))
+            title = self.md.title
+            description = self.md.description
+            preprocessed_chunks = update_chunks(chunks=chunks)
+            preprocessed_chunks = [
+                title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
-            print(f"Embedding dimensions: {len(embeddings[0])}")
+            # embeddings = use_jina.get_embedding(preprocessed_chunks)
+
+            # embeddings = [e["embedding"]
+            #               for e in embeddings if "embedding" in e.keys()]
+            embeddings = voyage_client.get_embeddings(preprocessed_chunks)
+            logger.debug("l2 = " + str(len(embeddings)))
+
+            logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
 
-            print(len(metadata))
-            print(len(vectors))
+            logger.debug(len(metadata))
+            logger.debug(len(vectors))
 
             batch_size = 100
             pinecone_client = PineconeClient()
-            # pinecone_client.upsert_batch(vectors, batch_size)
             res = pinecone_client.upsert(vectors, batch_size)
-            print(res)
+            logger.debug(res)
             return
         except Exception as e:
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")
@@ -321,8 +325,6 @@ class WebAgent(LinkAgent[TextSpecificMd]):
             description = response.get("data").get("description")
 
             #  filter all tags from content
-            # content = content.replace
-
             content = re.sub(r'<[^>]+>', '', content)
             chunks = use_jina.segment_data(content)
             # if chunks is not None and "chunks" in chunks.keys():
@@ -330,8 +332,8 @@ class WebAgent(LinkAgent[TextSpecificMd]):
 
             memId = str(uuid.uuid4())
             self.md.memId = memId
-            self.md.title += title
-            self.md.description += description
+            self.md.title += " " + title
+            self.md.description += " " + description
 
             meta_chunks = []
             for i in range(len(chunks)):

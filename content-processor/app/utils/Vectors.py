@@ -35,9 +35,9 @@ def flatten_metadata(metadata: Metadata):
 
 
 def combine_data_chunks(chunks: str, meta_chunks: List[Metadata], memId: str, diff=2):
-    JOINER = '<joiner>'
-    CENTRAL_OPENER = '<central>'
-    CENTRAL_CLOSER = '</central>'
+    JOINER = ' <joiner> '
+    CENTRAL_OPENER = ' <central> '
+    CENTRAL_CLOSER = ' </central> '
 
     # prev = -diff
     # next = diff
