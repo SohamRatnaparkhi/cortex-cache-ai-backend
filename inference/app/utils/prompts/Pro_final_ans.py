@@ -4,12 +4,45 @@ from datetime import datetime
 from app.utils.llms import get_answer_llm
 
 
-def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True):
+def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True, use_memory=True):
 
     # Construct the prompt
     initial_answer = initial_answer if initial_answer else "No memory available"
     refined_query = refined_query if refined_query else "No refined query available"
     context = context if context else "No chat context available"
+    if not use_memory:
+        final_prompt = NO_MEMORY_PROMPT
+        final_prompt += "\n## Input Structure\n"
+        final_prompt += f"\nUser Query: {original_query} \n"
+        final_prompt += f"\nRefined Query: {refined_query} \n"
+        final_prompt += f"\nChat Context: {context} \n"
+        RULES = """
+        1. ## Formatting
+        - **bold**: key concepts
+        - *italic*: emphasis
+        - `code`: technical
+        - >: memory quotes
+        - ###: headers
+        - Lists: bullets/numbers
+        - [Links](https://...): Web links (if any)
+        ## Core Rules
+        2. No system/process mentions
+        3. Keep the answer concise and to the point
+        4. Don't talk about answer response frameworks or guidelines at all.
+        5. Match user expertise level
+        6. Focus on key insights
+        7. Resolve context conflicts
+        8. Flag ambiguities
+
+## Content Types
+- If original or refined query asks to generate code then do it
+- If original or refined query asks to generate a list then do it
+- If original or refined query asks to generate a blog then do it
+
+Remember: Be a reliable second brain - precise, contextual, and efficient.
+        """
+        final_prompt += RULES
+        return final_prompt
 
     prompt = f"""
 # MindKeeper AI Core Instructions
@@ -58,7 +91,7 @@ NOTE THAT: Don't talk about answer response frameworks or guidelines at all in t
 - [Links](https://...): Web links (if any)
 
 ## Core Rules
-1. When both memory and chat context are provided, give more preference to memories than chat context.. If the query is NOT RELATED TO A PERTICULAR CHAT CONTEXT ENTRY, THEN STRICTLY IGNORE IT. 
+1. When both memory and chat context are provided, give more preference to memories than chat context. If the query is NOT RELATED TO A PERTICULAR CHAT CONTEXT ENTRY, THEN STRICTLY IGNORE IT.
 2. No system/process mentions
 3. Keep the answer concise and to the point
 4. Don't talk about answer response frameworks or guidelines at all.
@@ -157,6 +190,24 @@ Save content like:
 
 💡 Save this answer if useful!
 ```
+"""
+
+NO_MEMORY_PROMPT = """
+You are an intelligent and helpful chatbot designed to assist users with accurate, clear, and concise responses. Follow these steps to handle queries effectively:
+1. **Identify User Intent:** Understand the user's question or problem fully before formulating a response. Clarify ambiguous inputs by asking for more details if needed.
+2. **Provide Relevant Context:** Always ensure your answer includes the necessary context without overwhelming the user with unnecessary details.
+3. **Offer Step-by-Step Solutions:** For complex problems, break down your response into clear, actionable steps. Ensure that each step logically follows the previous one.
+4. **Stay on Topic:** Keep responses concise, ensuring you do not deviate from the user's query.
+5. **Confirm and Encourage Feedback:** Conclude by asking if the user needs further clarification or if you answered their question correctly.
+6. **Mitigate Ambiguity:** If there is more than one possible interpretation of the query, briefly outline the alternatives and ask the user to confirm which one they are referring to.
+7. Summarize Key Points:
+
+Recap the most important parts of your answer to reinforce understanding.
+Example: "To summarize, [brief summary of the key points]."
+
+Follow-Up
+1. [Contextual question]
+2. [Exploration suggestion]
 """
 
 

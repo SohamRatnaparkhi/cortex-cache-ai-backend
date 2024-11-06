@@ -29,7 +29,7 @@ async def user_query_service(query: QueryRequest, is_stream=False):
     title = metadata.get("title", "")
     description = metadata.get("description", "")
 
-    context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, limit=2)
+    context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, query.query_id, limit=2)
 
     updated_query = preprocess_query(message, context)
     prompt = generate_query_refinement_prompt(
@@ -45,6 +45,8 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         refined_query = newQuery
         is_pro = query.is_pro
 
+        use_memory = query.use_memory
+
         logger.debug(
             f"Improving LLM query with message: '{message}' and refined_query: '{refined_query}'")
 
@@ -55,19 +57,23 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         logger.debug(
             f"Improve query time: {time.time() - start_time:.4f} seconds")
 
-        pinecone_start = time.time()
-        combined_results = await get_final_results_from_memory(
-            original_query=message,
-            refined_query=llm_query,
-            metadata=metadata,
-            max_results=10,
-            top_k=15
-        )
-        logger.debug(
-            f"Pinecone query time: {time.time() - pinecone_start:.4f} seconds")
+        combined_results = None
+        chunk_ids = []
+        mem_ids = []
+        if use_memory:
+            pinecone_start = time.time()
+            combined_results = await get_final_results_from_memory(
+                original_query=message,
+                refined_query=llm_query,
+                metadata=metadata,
+                max_results=10,
+                top_k=15
+            )
+            logger.debug(
+                f"Pinecone query time: {time.time() - pinecone_start:.4f} seconds")
 
-        chunk_ids = [res['chunkId'] for res in combined_results]
-        mem_ids = [res['memId'] for res in combined_results]
+            chunk_ids = [res['chunkId'] for res in combined_results]
+            mem_ids = [res['memId'] for res in combined_results]
 
         logger.info("Inserting message into the database")
         message = await insert_message_in_db(
@@ -82,38 +88,40 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         )
         logger.info("Message inserted into the database")
 
-        mem_data_start = time.time()
-        mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
-        logger.debug(
-            f"Get memory data time: {time.time() - mem_data_start:.4f} seconds")
+        complete_data = ""
+        if use_memory:
+            mem_data_start = time.time()
+            mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
+            logger.debug(
+                f"Get memory data time: {time.time() - mem_data_start:.4f} seconds")
 
-        complete_data_start = time.time()
-        min_length = min(len(chunk_ids), len(mem_data),
-                         len(mem_ids), len(combined_results))
-        ans_list = []
+            complete_data_start = time.time()
+            min_length = min(len(chunk_ids), len(mem_data),
+                             len(mem_ids), len(combined_results))
+            ans_list = []
 
-        logger.info(
-            f'Citations received: {len(chunk_ids)} == {len(mem_data)} == {len(mem_ids)} == {len(combined_results)}')
+            logger.info(
+                f'Citations received: {len(chunk_ids)} == {len(mem_data)} == {len(mem_ids)} == {len(combined_results)}')
 
-        data_entries = []
-        for i in range(min_length):
-            res = combined_results[i]
-            mem = mem_data[i]
-            current_ans = {
-                "chunk_id": chunk_ids[i],
-                "score": res['score'],
-                "mem_data": mem.memData,
-                "memId": mem_ids[i]
-            }
-            data_entries.append(
-                f"<data>\n\t<content>{current_ans['mem_data']}</content>\n\t<data_score>{current_ans['score']}</data_score>\n</data>\n"
-            )
-            ans_list.append(current_ans)
+            data_entries = []
+            for i in range(min_length):
+                res = combined_results[i]
+                mem = mem_data[i]
+                current_ans = {
+                    "chunk_id": chunk_ids[i],
+                    "score": res['score'],
+                    "mem_data": mem.memData,
+                    "memId": mem_ids[i]
+                }
+                data_entries.append(
+                    f"<data>\n\t<content>{current_ans['mem_data']}</content>\n\t<data_score>{current_ans['score']}</data_score>\n</data>\n"
+                )
+                ans_list.append(current_ans)
 
-        complete_data = f"<question>{llm_query}</question>\n{''.join(data_entries)}"
-        logger.debug(
-            f"Build complete data time: {time.time() - complete_data_start:.4f} seconds")
-        logger.info(f"Message: {message}")
+            complete_data = f"<question>{llm_query}</question>\n{''.join(data_entries)}"
+            logger.debug(
+                f"Build complete data time: {time.time() - complete_data_start:.4f} seconds")
+            logger.info(f"Message: {message}")
 
         final_ans_start = time.time()
 
@@ -127,7 +135,8 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
                         refined_query=llm_query,
                         context=context,
                         initial_answer=complete_data,
-                        is_stream=True
+                        is_stream=True,
+                        use_memory=query.use_memory
                     ),
                     "messageId": message.id
                 }
@@ -263,7 +272,7 @@ def convert_newlines(text):
     return converted
 
 
-async def get_chat_context(conversation_id: str, limit=2):
+async def get_chat_context(conversation_id: str, query_id: str, limit=2):
     try:
         messages = await prisma.message.find_many(
             where={
@@ -275,6 +284,8 @@ async def get_chat_context(conversation_id: str, limit=2):
         queryIds = set()
         for message in messages:
             if message.sender != "ai":
+                if message.id == query_id:
+                    continue
                 queryIds.add(message.id)
             if len(queryIds) == limit:
                 break

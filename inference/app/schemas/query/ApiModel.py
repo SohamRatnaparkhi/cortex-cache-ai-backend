@@ -13,6 +13,7 @@ class QueryRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
     is_pro: Optional[bool] = False
     agent: Optional[str] = "default"
+    use_memory: Optional[bool] = True
 
 
 class DBResponse(BaseModel):
