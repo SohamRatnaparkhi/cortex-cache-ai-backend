@@ -11,7 +11,7 @@ from app.schemas.query.ApiModel import QueryRequest
 from app.services.Memory import get_final_results_from_memory
 from app.services.messages import insert_message_in_db
 from app.utils.app_logger_config import logger
-from app.utils.llms import answer_llm_pro as llm
+from app.utils.llms import get_answer_llm
 from app.utils.Preprocessor import improve_query, preprocess_query
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
 from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
@@ -132,7 +132,7 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
                     "messageId": message.id
                 }
             final_ans = get_final_pro_answer(
-                message, refined_query, context, complete_data)
+                message, refined_query, context, complete_data, llm=query.llm)
         else:
             if is_stream:
                 return {
@@ -200,10 +200,12 @@ def score_answers(original_query, refined_query, context, answer1, answer2, answ
     return scored_answers
 
 
-async def stream_response(prompt: str, messageId: str) -> AsyncIterator[str]:
+async def stream_response(prompt: str, messageId: str, llm_type: str = 'gpt-4o') -> AsyncIterator[str]:
     # "got the prompt"
     message_content = ""
     message_id_sent = False
+    print(f"LLM type: {llm_type}")
+    llm = get_answer_llm(llm_type, is_pro=True)
     logger.debug(f"Streaming response with prompt: {prompt}")
     try:
         async for chunk in llm.astream([HumanMessage(content=prompt)]):

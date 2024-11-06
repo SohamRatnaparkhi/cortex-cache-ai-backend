@@ -1,10 +1,7 @@
-import os
 from datetime import datetime
 
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
-
-from app.utils.llms import answer_llm_pro as llm
+# from app.utils.llms import answer_llm_pro as llm
+from app.utils.llms import get_answer_llm
 
 
 def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True):
@@ -163,12 +160,12 @@ Save content like:
 """
 
 
-def get_final_pro_answer(original_query, refined_query, context, initial_answer, is_stream=True):
+def get_final_pro_answer(original_query, refined_query, context, initial_answer, is_stream=True, llm='gpt-4o'):
     try:
 
         prompt = get_final_pro_answer_prompt(
             original_query, refined_query, context, initial_answer, is_stream)
-        final_ans = llm.invoke(prompt)
+        final_ans = get_answer_llm(llm).invoke(prompt)
         return final_ans
     except Exception as e:
         raise RuntimeError(

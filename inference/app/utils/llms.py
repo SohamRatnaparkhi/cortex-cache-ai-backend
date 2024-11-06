@@ -49,6 +49,68 @@ memory_search_query_llm = ChatGroq(
     max_retries=3,
 )
 
+
+def get_answer_llm(llm_name: str = 'gpt-4o', is_pro: bool = False):
+    if not is_pro:
+        return ChatGroq(
+            model="llama-3.1-70b-versatile",
+            temperature=0.7,
+            max_tokens=1000,
+            timeout=None,
+            max_retries=3,
+        )
+    if llm_name == 'gpt-4o':
+        return ChatOpenAI(
+            api_key=OPEN_API_KEY,
+            model_name="gpt-4o",
+            max_retries=3,
+            timeout=None,
+            temperature=0.4,
+            max_tokens=1800,
+        )
+    if llm_name == 'sonnet-3.5':
+        return ChatAnthropic(
+            api_key=ANTHROPIC_API_KEY,
+            model_name="claude-3-5-sonnet-20241022",
+            max_tokens=3000,
+            temperature=1,
+            timeout=None,
+            max_retries=3,
+        )
+    if llm_name == 'llama-3.1-70b':
+        return ChatGroq(
+            model="llama-3.1-70b-versatile",
+            temperature=0.7,
+            max_tokens=1800,
+            timeout=None,
+            max_retries=3,
+        )
+    if llm_name == 'gpt-4o-mini':
+        return ChatOpenAI(
+            api_key=OPEN_API_KEY,
+            model_name="gpt-4o-mini",
+            max_retries=3,
+            timeout=None,
+            temperature=0.7,
+            max_tokens=1800,
+        )
+    if llm_name == 'llama-3.2-3b':
+        return ChatGroq(
+            model="llama-3.2-3b-preview",
+            temperature=0.1,
+            max_tokens=1000,
+            timeout=None,
+            max_retries=3,
+        )
+
+    if llm_name == 'llama-3.2-90b':
+        return ChatGroq(
+            model="llama-3.2-90b",
+            temperature=0.7,
+            max_tokens=1000,
+            timeout=None,
+            max_retries=3,
+        )
 # answer_llm_pro = ChatAnthropic(
 #     api_key=ANTHROPIC_API_KEY,
 #     model_name="claude-3-5-sonnet-20241022",
@@ -66,14 +128,15 @@ memory_search_query_llm = ChatGroq(
 #     max_retries=3,
 # )
 
-answer_llm_pro = ChatOpenAI(
-    api_key=OPEN_API_KEY,
-    model_name="gpt-4o",
-    max_retries=3,
-    timeout=None,
-    temperature=0.4,
-    max_tokens=1800,
-)
+
+# answer_llm_pro = ChatOpenAI(
+#     api_key=OPEN_API_KEY,
+#     model_name="gpt-4o",
+#     max_retries=3,
+#     timeout=None,
+#     temperature=0.4,
+#     max_tokens=1800,
+# )
 
 # answer_llm_pro = ChatOpenAI(
 #     api_key=OPEN_API_KEY,
