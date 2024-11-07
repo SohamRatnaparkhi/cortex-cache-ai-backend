@@ -2,9 +2,15 @@ from datetime import datetime
 
 # from app.utils.llms import answer_llm_pro as llm
 from app.utils.llms import get_answer_llm
+from app.utils.prompts.agents.SocialMedia import \
+    generate_social_media_content_prompt
 
 
-def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True, use_memory=True):
+def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True, use_memory=True, agent='default'):
+
+    if agent != 'default':
+        if ('-' in agent and agent.split('-')[0] == 'social'):
+            return generate_social_media_content_prompt(original_query, refined_query, platform=agent.split('-')[1], memory_data=initial_answer, context=context)
 
     # Construct the prompt
     initial_answer = initial_answer if initial_answer else "No memory available"

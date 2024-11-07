@@ -31,9 +31,11 @@ async def user_query_service(query: QueryRequest, is_stream=False):
 
     context, query_only_context, conversationFound = await get_chat_context(query.conversation_id, query.query_id, limit=2)
 
+    print("Context: ", context)
+
     updated_query = preprocess_query(message, context)
     prompt = generate_query_refinement_prompt(
-        context=query_only_context, query=message, refined_query=updated_query, title=title, description=description)
+        context=context, query=message, refined_query=updated_query, title=title, description=description)
     return await process_single_query(query, context, is_stream, newQuery=prompt, conversationFound=conversationFound)
 
 
@@ -136,7 +138,8 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
                         context=context,
                         initial_answer=complete_data,
                         is_stream=True,
-                        use_memory=query.use_memory
+                        use_memory=query.use_memory,
+                        agent=query.agent
                     ),
                     "messageId": message.id
                 }
@@ -282,6 +285,7 @@ async def get_chat_context(conversation_id: str, query_id: str, limit=2):
                 "createdAt": "desc"
             })
         queryIds = set()
+        # print(messages)
         for message in messages:
             if message.sender != "ai":
                 if message.id == query_id:
