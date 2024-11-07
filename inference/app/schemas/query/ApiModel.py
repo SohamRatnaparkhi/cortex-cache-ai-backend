@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel
@@ -6,11 +7,13 @@ from pydantic import BaseModel
 class QueryRequest(BaseModel):
     query: str
     query_id: str
+    llm: str
     user_id: Optional[str] = ""
     conversation_id: Optional[str] = ""
     metadata: Optional[Dict[str, Any]] = None
-    number: Optional[int] = None
     is_pro: Optional[bool] = False
+    agent: Optional[str] = "default"
+    use_memory: Optional[bool] = True
 
 
 class DBResponse(BaseModel):

@@ -42,9 +42,13 @@ async def stream_llm_response(query: QueryRequest, request: Request):
         (userId, emailId, apiKey) = get_credentials(header)
 
         query.user_id = userId
+
+        print("Query from user: ", query)
+
         obj = await user_query_service(query, is_stream=True)
-        return StreamingResponse(stream_response(obj["prompt"], obj["messageId"]), media_type="text/event-stream")
+        return StreamingResponse(stream_response(obj["prompt"], obj["messageId"], llm_type=query.llm or 'llama-3.1-70b'), media_type="text/event-stream")
 
     except Exception as e:
         print(e)
+        print(query)
         return {"error": "Invalid JWT token"}
