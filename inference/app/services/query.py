@@ -304,7 +304,8 @@ async def get_chat_context(conversation_id: str, query_id: str, limit=2):
             if message.questionId in queryIds:
                 if (message.questionId not in context):
                     context[message.questionId] = {}
-                context[message.questionId]["ai"] = message.content
+                context[message.questionId]["ai"] = message.content.substring(
+                    0, 300)
 
         query_only_context = ""
         for key in context.keys():
