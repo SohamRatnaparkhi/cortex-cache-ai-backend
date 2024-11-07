@@ -2,6 +2,7 @@ from datetime import datetime
 
 # from app.utils.llms import answer_llm_pro as llm
 from app.utils.llms import get_answer_llm
+from app.utils.prompts.agents.CodingAgent import generate_coding_agent_prompt
 from app.utils.prompts.agents.SocialMedia import \
     generate_social_media_content_prompt
 
@@ -11,6 +12,8 @@ def get_final_pro_answer_prompt(original_query, refined_query, context, initial_
     if agent != 'default':
         if ('-' in agent and agent.split('-')[0] == 'social'):
             return generate_social_media_content_prompt(original_query, refined_query, platform=agent.split('-')[1], memory_data=initial_answer, context=context)
+        if ('code' in agent):
+            return generate_coding_agent_prompt(original_query, refined_query, memory_data=initial_answer)
 
     # Construct the prompt
     initial_answer = initial_answer if initial_answer else "No memory available"
