@@ -6,7 +6,7 @@ from app.utils.app_logger_config import logger
 from app.utils.JinaUtils import get_embedding
 
 
-def pinecone_query(query: str, metadata: dict, top_k: int = 15) -> List[Dict[str, Any]]:
+async def pinecone_query(query: str, metadata: dict, top_k: int = 15) -> List[Dict[str, Any]]:
     try:
         pinecone_client = PineconeClient()
         simple_metadata = {}
@@ -46,7 +46,7 @@ def pinecone_query(query: str, metadata: dict, top_k: int = 15) -> List[Dict[str
         #     print("No vectors returned")
         #     return []
         # vectors = vectors_obj['data'][0]['embedding']
-        embeddings = voyage_client.get_embeddings([final_query])
+        embeddings = await voyage_client.get_embeddings([final_query])
         vectors = embeddings[0]
         res = pinecone_client.query(
             vector=vectors, top_k=top_k, filters=pinecone_filters)

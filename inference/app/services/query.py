@@ -2,11 +2,13 @@ import asyncio
 import json
 import re
 import time
-from typing import AsyncIterator, Dict
+from typing import AsyncIterator, Dict, List
 
 from langchain.schema import HumanMessage
 
+from app.core import voyage_client
 from app.prisma.prisma import get_all_mems_based_on_chunk_ids, prisma
+from app.schemas.memory.ApiModel import Results
 from app.schemas.query.ApiModel import QueryRequest
 from app.services.Memory import get_final_results_from_memory
 from app.services.messages import insert_message_in_db
@@ -64,18 +66,26 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         mem_ids = []
         if use_memory:
             pinecone_start = time.time()
-            combined_results = await get_final_results_from_memory(
+            combined_results: List[Results] = await get_final_results_from_memory(
                 original_query=message,
                 refined_query=llm_query,
                 metadata=metadata,
-                max_results=10,
                 top_k=15
             )
             logger.debug(
                 f"Pinecone query time: {time.time() - pinecone_start:.4f} seconds")
 
-            chunk_ids = [res['chunkId'] for res in combined_results]
-            mem_ids = [res['memId'] for res in combined_results]
+            re_ranked_results = await voyage_client.re_rank_data(
+                data=combined_results,
+                k=10,
+                query=llm_query
+            )
+
+            if re_ranked_results is None:
+                raise Exception("Error re-ranking data")
+
+            chunk_ids = [res.chunkId for res in re_ranked_results]
+            mem_ids = [res.memId for res in re_ranked_results]
 
         logger.info("Inserting message into the database")
         message = await insert_message_in_db(
@@ -92,28 +102,19 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
 
         complete_data = ""
         if use_memory:
-            mem_data_start = time.time()
-            mem_data = await get_all_mems_based_on_chunk_ids(list(set(chunk_ids)))
-            logger.debug(
-                f"Get memory data time: {time.time() - mem_data_start:.4f} seconds")
-
             complete_data_start = time.time()
-            min_length = min(len(chunk_ids), len(mem_data),
-                             len(mem_ids), len(combined_results))
+
             ans_list = []
 
-            logger.info(
-                f'Citations received: {len(chunk_ids)} == {len(mem_data)} == {len(mem_ids)} == {len(combined_results)}')
-
             data_entries = []
-            for i in range(min_length):
-                res = combined_results[i]
-                mem = mem_data[i]
+            for i in range(len(re_ranked_results)):
+                res = re_ranked_results[i]
+
                 current_ans = {
-                    "chunk_id": chunk_ids[i],
-                    "score": res['score'],
-                    "mem_data": mem.memData,
-                    "memId": mem_ids[i]
+                    "chunk_id": res.chunkId,
+                    "score": res.score,
+                    "mem_data": res.mem_data,
+                    "memId": res.memId
                 }
                 data_entries.append(
                     f"<data>\n\t<content>{current_ans['mem_data']}</content>\n\t<data_score>{current_ans['score']}</data_score>\n</data>\n"
@@ -275,7 +276,7 @@ def convert_newlines(text):
     return converted
 
 
-async def get_chat_context(conversation_id: str, query_id: str, limit=2):
+async def get_chat_context(conversation_id: str, query_id: str | None = None, limit=2):
     try:
         messages = await prisma.message.find_many(
             where={
@@ -288,7 +289,7 @@ async def get_chat_context(conversation_id: str, query_id: str, limit=2):
         # print(messages)
         for message in messages:
             if message.sender != "ai":
-                if message.id == query_id:
+                if query_id != None and message.id == query_id:
                     continue
                 queryIds.add(message.id)
             if len(queryIds) == limit:
@@ -304,8 +305,7 @@ async def get_chat_context(conversation_id: str, query_id: str, limit=2):
             if message.questionId in queryIds:
                 if (message.questionId not in context):
                     context[message.questionId] = {}
-                context[message.questionId]["ai"] = message.content.substring(
-                    0, 300)
+                context[message.questionId]["ai"] = message.content[0: 300]
 
         query_only_context = ""
         for key in context.keys():
