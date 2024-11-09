@@ -4,10 +4,9 @@ from typing import Dict, List, Set, Tuple, TypedDict
 
 from app.prisma.prisma import full_text_search, get_all_mems_based_on_chunk_ids
 from app.schemas.memory.ApiModel import Results
+from app.utils.app_logger_config import logger
 from app.utils.Pinecone_query import pinecone_query
 from app.utils.Preprocessor import prepare_fulltext_query
-
-logger = getLogger(__name__)
 
 
 class SearchResult(TypedDict):
@@ -37,38 +36,6 @@ class SearchConfig:
     DEFAULT_RRF_K = 100
 
 
-def get_semantic_search_results(
-    original_query: str,
-    refined_query: str,
-    metadata: dict,
-    top_k: int = SearchConfig.DEFAULT_TOP_K,
-    threshold: float = SearchConfig.DEFAULT_ABSOLUTE_THRESHOLD
-) -> Tuple[List[SearchResult], List[SearchResult]]:
-    """
-    Perform semantic search for both original and refined queries.
-
-    Args:
-        original_query: Original search query
-        refined_query: Refined version of the search query
-        metadata: Search metadata
-        top_k: Number of top results to return
-        threshold: Minimum score threshold
-
-    Returns:
-        Tuple of filtered results for original and refined queries
-    """
-    refined_results = pinecone_query(refined_query, metadata, top_k)
-    original_results = pinecone_query(original_query, metadata, top_k)
-
-    logger.info("Semantic search results - Original: %d, Refined: %d",
-                len(original_results), len(refined_results))
-
-    return (
-        [res for res in original_results if res["score"] >= threshold],
-        [res for res in refined_results if res["score"] >= threshold]
-    )
-
-
 async def get_full_text_search_results(
     original_query: str,
     refined_query: str,
@@ -95,72 +62,36 @@ async def get_full_text_search_results(
     return original_results, refined_results
 
 
-def reciprocal_rank_fusion(
-    result_lists: List[List[SearchResult]],
-    k: int = SearchConfig.DEFAULT_RRF_K
-) -> List[Tuple[str, str, float]]:
+async def get_semantic_search_results(
+    original_query: str,
+    refined_query: str,
+    metadata: dict,
+    top_k: int = SearchConfig.DEFAULT_TOP_K,
+    threshold: float = SearchConfig.DEFAULT_ABSOLUTE_THRESHOLD
+) -> Tuple[List[SearchResult], List[SearchResult]]:
     """
-    Implement reciprocal rank fusion to combine multiple result lists.
+    Perform semantic search for both original and refined queries.
 
     Args:
-        result_lists: List of search result lists to combine
-        k: RRF constant
+        original_query: Original search query
+        refined_query: Refined version of the search query
+        metadata: Search metadata
+        top_k: Number of top results to return
+        threshold: Minimum score threshold
 
     Returns:
-        Combined and ranked results
+        Tuple of filtered results for original and refined queries
     """
-    fused_scores: Dict[Tuple[str, str], float] = {}
+    refined_results = await pinecone_query(refined_query, metadata, top_k)
+    original_results = await pinecone_query(original_query, metadata, top_k)
 
-    for results in result_lists:
-        for rank, result in enumerate(results):
-            doc_key = (result["memId"], result["chunkId"])
-            weight = (SearchConfig.SEMANTIC_WEIGHT
-                      if result["source"] == "semantic"
-                      else SearchConfig.FULLTEXT_WEIGHT)
+    logger.info("Semantic search results - Original: %d, Refined: %d",
+                len(original_results), len(refined_results))
 
-            if not isinstance(result["score"], (int, float)):
-                logger.warning("Invalid score type for %s: %s",
-                               doc_key, type(result["score"]))
-                continue
-
-            score = (weight / (rank + k)) * scale_score(result["score"])
-            fused_scores[doc_key] = fused_scores.get(doc_key, 0) + score
-
-    return sorted(
-        [(memId, chunkId, score)
-         for (memId, chunkId), score in fused_scores.items()],
-        key=lambda x: x[2],
-        reverse=True
+    return (
+        [res for res in original_results if res["score"] >= threshold],
+        [res for res in refined_results if res["score"] >= threshold]
     )
-
-
-def apply_relative_threshold(
-    fused_results: List[Tuple[str, str, float]],
-    relative_threshold: float = SearchConfig.DEFAULT_RELATIVE_THRESHOLD
-) -> List[SearchResult]:
-    """
-    Apply relative threshold to fused results.
-
-    Args:
-        fused_results: List of fused search results
-        relative_threshold: Threshold relative to top score
-
-    Returns:
-        Filtered results above threshold
-    """
-    if not fused_results:
-        return []
-
-    top_score = max(fused_results[0][2], relative_threshold / 2)
-    threshold = top_score * relative_threshold
-
-    logger.debug("Applying relative threshold: %f", threshold)
-
-    return [
-        {"memId": memId, "chunkId": chunkId, "score": score}
-        for memId, chunkId, score in fused_results
-        if score >= threshold
-    ]
 
 
 def get_unique_chunk_ids(result_lists: List[List[SearchResult]]) -> Set[str]:
@@ -197,7 +128,7 @@ async def get_final_results_from_memory(
         Combined and processed search results
     """
     # Get results from both search methods
-    semantic_results = get_semantic_search_results(
+    semantic_results = await get_semantic_search_results(
         original_query, refined_query, metadata, top_k)
     fulltext_results = await get_full_text_search_results(
         original_query, refined_query, metadata, top_k)
@@ -240,16 +171,3 @@ async def get_final_results_from_memory(
         )
         for memory in memories_data
     ]
-
-
-def scale_score(score: float) -> float:
-    """
-    Scale the search score.
-
-    Args:
-        score: Original score
-
-    Returns:
-        Scaled score
-    """
-    return score * 100

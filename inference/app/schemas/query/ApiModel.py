@@ -16,6 +16,11 @@ class QueryRequest(BaseModel):
     use_memory: Optional[bool] = True
 
 
+class MemoryQueryRequest(BaseModel):
+    query: str
+    metadata: Optional[Dict[str, Any]] = None
+
+
 class DBResponse(BaseModel):
     data: str
     memId: str

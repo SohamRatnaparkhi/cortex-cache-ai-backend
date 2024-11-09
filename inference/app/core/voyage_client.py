@@ -1,27 +1,84 @@
 import time
+from collections import namedtuple
+from typing import List
 
 import voyageai
 from dotenv import load_dotenv
 
+from app.schemas.memory.ApiModel import Results, ResultsAfterReRanking
 from app.utils.app_logger_config import logger
 
 load_dotenv()
 
-vo = voyageai.Client()
+vo = voyageai.AsyncClient()
 
-batch_size = 128
+EMBEDDING_BATCH_SIZE = 128
+
+RerankingResult = namedtuple(
+    "RerankingResult", ["index", "document", "relevance_score"]
+)
 
 
-def get_embeddings(documents: list[str]):
+class ReRankingConfig:
+    MODEL = "rerank-2"
+    QUERY_TOKEN_LIMIT = 3500
+    BATCH_LIMIT = 1000
+    QUERY_DOCUMENT_TOKEN_LIMIT = 16000
+
+
+async def get_embeddings(documents: list[str]):
     try:
         embeddings = []
-        for i in range(0, len(documents), batch_size):
-            batch = documents[i:i + batch_size]
-            embeddings.extend(vo.embed(batch, model="voyage-3").embeddings)
+        for i in range(0, len(documents), EMBEDDING_BATCH_SIZE):
+            batch = documents[i:i + EMBEDDING_BATCH_SIZE]
+            emb = await vo.embed(batch, model="voyage-3")
+            embeddings.extend(emb.embeddings)
 
-            if (len(documents) / batch_size) > 4:
+            if (len(documents) / EMBEDDING_BATCH_SIZE) > 4:
                 time.sleep(1)
         return embeddings
     except Exception as e:
         logger.error(f"Error getting embeddings: {e}")
         return []
+
+
+async def re_rank_data(data: List[Results], k: int, query: str):
+    try:
+        re_ranking_results: List[RerankingResult] = []
+        documents = [d.mem_data for d in data]
+
+        try:
+            for i in range(0, len(documents), ReRankingConfig.BATCH_LIMIT):
+                batch = documents[i:i + ReRankingConfig.BATCH_LIMIT]
+                res = await vo.rerank(
+                    model=ReRankingConfig.MODEL,
+                    documents=batch,
+                    query=query,
+                    top_k=k,
+                )
+                re_ranking_results.extend(res.results)
+        except Exception as e:
+            logger.error(f"Error re-ranking data: {e}")
+            return None
+
+        final_data: List[ResultsAfterReRanking] = []
+        try:
+            # Link document data with their memId and chunkId
+
+            for result in re_ranking_results:
+                final_data.append(
+                    ResultsAfterReRanking(
+                        memId=data[result.index].memId,
+                        chunkId=data[result.index].chunkId,
+                        mem_data=data[result.index].mem_data,
+                        score=result.relevance_score,
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Error linking document data: {e}")
+            return final_data
+
+        return final_data
+    except Exception as e:
+        logger.error(f"Error re-ranking data: {e}")
+        return None

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Request
 from prisma.types import MemoryCreateInput, MemoryUpdateInput
 
+from app.core import voyage_client
 from app.prisma.prisma import prisma
-from app.schemas.query.ApiModel import QueryRequest
+from app.schemas.query.ApiModel import MemoryQueryRequest, QueryRequest
 from app.services.Memory import get_final_results_from_memory
 from app.services.MemoryOps import (CombinedMemory, CombinedMemoryChunk,
                                     get_all_memories_by_user_id,
@@ -60,12 +61,12 @@ async def delete_memory(memory_id: str):
 
 
 @router.post('/search')
-async def search_memories(request: QueryRequest, request2: Request):
+async def search_memories(request: MemoryQueryRequest, request2: Request):
     try:
         header = request2.headers.get("Authorization")
         (userId, emailId, apiKey) = get_credentials(header)
 
-        request.user_id = userId
+        # request.user_id = userId
 
         query = request.query
         prompt = get_search_prompt(query)
@@ -79,10 +80,16 @@ async def search_memories(request: QueryRequest, request2: Request):
             imp_q = improved_query.content
 
         combined_results = await get_final_results_from_memory(
-            original_query=query, refined_query=imp_q, metadata=request.metadata, max_results=40, top_k=15)
+            original_query=query, refined_query=imp_q, metadata=request.metadata, top_k=15)
 
-        chunk_ids = [res['chunkId'] for res in combined_results]
-        memIds = [res['memId'] for res in combined_results]
+        re_ranked_results = await voyage_client.re_rank_data(
+            data=combined_results,
+            k=20,
+            query=imp_q
+        )
+
+        chunk_ids = [res.chunkId for res in re_ranked_results]
+        memIds = [res.memId for res in re_ranked_results]
 
         unique_memIds = list(set(memIds))
 
