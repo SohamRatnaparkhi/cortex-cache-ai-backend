@@ -30,3 +30,13 @@ class GetMemoryOutput(BaseModel):
     userId: str
     mindMap: Optional[MindMap] = None
     User: Optional[UserModel] = None
+
+
+class Results(BaseModel):
+    memId: str
+    chunkId: str
+    mem_data: str
+
+
+class ResultsAfterReRanking(Results):
+    score: float
