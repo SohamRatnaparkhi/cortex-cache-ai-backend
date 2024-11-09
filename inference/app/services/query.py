@@ -90,8 +90,8 @@ async def process_single_query(query: QueryRequest, context: str, is_stream=Fals
         logger.info("Inserting message into the database")
         message = await insert_message_in_db(
             query_id=query.query_id,
-            chunk_ids=list(set(chunk_ids)),
-            memIds=list(set(mem_ids)),
+            chunk_ids=chunk_ids,
+            memIds=mem_ids,
             user_id=query.user_id,
             conversation_id=query.conversation_id,
             user_query=query.query,
