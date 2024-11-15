@@ -57,8 +57,8 @@ CUSTOM_STOP_WORDS = STOP_WORDS.copy()
 CUSTOM_STOP_WORDS.discard('name')  # Keep 'name' as it might be important in
 
 
-# nltk.download('stopwords')
-# nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('punkt')
 
 
 def prepare_fulltext_query(natural_query):

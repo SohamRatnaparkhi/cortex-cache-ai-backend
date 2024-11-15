@@ -4,7 +4,9 @@ import jwt
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-load_dotenv()
+if os.path.exists(".env"):
+    load_dotenv()
+
 
 secret = os.getenv("JWT_SECRET")
 
