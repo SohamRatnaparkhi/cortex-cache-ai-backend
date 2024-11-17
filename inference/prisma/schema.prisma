@@ -1,6 +1,7 @@
 generator client {
-  provider  = "prisma-client-py"
-  interface = "asyncio"
+  provider      = "prisma-client-py"
+  interface     = "asyncio"
+  binaryTargets = ["native", "rhel-openssl-1.0.x"]
 }
 
 datasource db {
@@ -8,33 +9,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model ApiKeys {
+  userId    String
+  apiKey    String   @unique
+  createdAt DateTime @default(now())
+  isPrimary Boolean  @default(false)
+  User      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, apiKey])
+}
+
 model Conversation {
-  id        String             @id @default(uuid())
+  id        String             @id
   title     String?
   createdAt DateTime           @default(now())
-  updatedAt DateTime           @default(now()) @updatedAt
+  updatedAt DateTime           @default(now())
   userId    String
   summary   String?
   memoryIds String[]
   status    ConversationStatus @default(ACTIVE)
-  user      User               @relation(fields: [userId], references: [id])
-  messages  Message[]
+  User      User               @relation(fields: [userId], references: [id])
+  Message   Message[]
 
   @@index([userId, updatedAt])
-}
-
-model Message {
-  id             String       @id @default(uuid())
-  content        String
-  sender         String
-  createdAt      DateTime     @default(now())
-  conversationId String
-  memoryId       String[]     @default([])
-  chunkIds       String[]     @default([])
-  questionId     String?
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-
-  @@index([conversationId, createdAt])
 }
 
 model Memory {
@@ -47,10 +44,10 @@ model Memory {
   tags      String[]
   metadata  Json?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime
   mindMapId String?
   userId    String
-  mindMap   MindMap? @relation(fields: [mindMapId], references: [id])
+  MindMap   MindMap? @relation(fields: [mindMapId], references: [id])
   User      User     @relation(fields: [userId], references: [id])
 
   @@id([memId, chunkId])
@@ -58,90 +55,85 @@ model Memory {
   @@index([tags])
 }
 
+model Message {
+  id             String       @id
+  content        String
+  sender         String
+  createdAt      DateTime     @default(now())
+  conversationId String
+  memoryId       String[]     @default([])
+  chunkIds       String[]     @default([])
+  questionId     String?
+  Conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, createdAt])
+}
+
 model MindMap {
-  id          String          @id @default(uuid())
-  title       String
-  description String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  memories    Memory[]
-  sharedWith  SharedMindMap[]
-}
+  userId        String
+  id            String          @id
+  title         String
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  Memory        Memory[]
+  SharedMindMap SharedMindMap[]
 
-model User {
-  id                 String          @id @default(uuid())
-  name               String
-  email              String          @unique
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  accountType        AccountType     @default(FREE)
-  currentBalance     Int             @default(0)
-  totalUsedTokens    Int             @default(0)
-  password           String?
-  pfp                String?
-  apiKeys            ApiKeys[]
-  conversations      Conversation[]
-  Memory             Memory[]
-  Session            Session[]
-  sharedMemoriesFrom SharedMemory[]  @relation("SharedMemoryFrom")
-  sharedMemoriesTo   SharedMemory[]  @relation("SharedMemoryTo")
-  sharedMindMapsFrom SharedMindMap[] @relation("SharedMindMapFrom")
-  sharedMindMapsTo   SharedMindMap[] @relation("SharedMindMapTo")
-  SocialUser         SocialUser[]
-}
-
-model ApiKeys {
-  userId    String
-  apiKey    String   @unique
-  createdAt DateTime @default(now())
-  isPrimary Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id])
-
-  @@unique([userId, apiKey])
+  User User @relation(fields: [userId], references: [id])
 }
 
 model SharedMemory {
-  id         String     @id @default(uuid())
-  fromUserId String
-  toUserId   String
-  memoryId   String
-  permission Permission
-  createdAt  DateTime   @default(now())
-  fromUser   User       @relation("SharedMemoryFrom", fields: [fromUserId], references: [id])
-  toUser     User       @relation("SharedMemoryTo", fields: [toUserId], references: [id])
+  id                                 String     @id
+  fromUserId                         String
+  toUserId                           String
+  memoryId                           String
+  permission                         Permission
+  createdAt                          DateTime   @default(now())
+  User_SharedMemory_fromUserIdToUser User       @relation("SharedMemory_fromUserIdToUser", fields: [fromUserId], references: [id])
+  User_SharedMemory_toUserIdToUser   User       @relation("SharedMemory_toUserIdToUser", fields: [toUserId], references: [id])
 
   @@unique([fromUserId, toUserId, memoryId])
 }
 
 model SharedMindMap {
-  id         String     @id @default(uuid())
-  fromUserId String
-  toUserId   String
-  mindMapId  String
-  permission Permission
-  createdAt  DateTime   @default(now())
-  fromUser   User       @relation("SharedMindMapFrom", fields: [fromUserId], references: [id])
-  mindMap    MindMap    @relation(fields: [mindMapId], references: [id])
-  toUser     User       @relation("SharedMindMapTo", fields: [toUserId], references: [id])
+  id                                  String     @id
+  fromUserId                          String
+  toUserId                            String
+  mindMapId                           String
+  permission                          Permission
+  createdAt                           DateTime   @default(now())
+  User_SharedMindMap_fromUserIdToUser User       @relation("SharedMindMap_fromUserIdToUser", fields: [fromUserId], references: [id])
+  MindMap                             MindMap    @relation(fields: [mindMapId], references: [id])
+  User_SharedMindMap_toUserIdToUser   User       @relation("SharedMindMap_toUserIdToUser", fields: [toUserId], references: [id])
 
   @@unique([fromUserId, toUserId, mindMapId])
 }
 
-model memory_search_vector {
-  memid         String
-  chunkid       String
-  search_vector Unsupported("tsvector")?
+model User {
+  id                                           String          @id
+  name                                         String
+  email                                        String          @unique
+  pfp                                          String?
+  password                                     String?
+  createdAt                                    DateTime        @default(now())
+  updatedAt                                    DateTime
+  accountType                                  AccountType     @default(FREE)
+  currentBalance                               Int             @default(0)
+  totalUsedTokens                              Int             @default(0)
+  ApiKeys                                      ApiKeys[]
+  Conversation                                 Conversation[]
+  Memory                                       Memory[]
+  SharedMemory_SharedMemory_fromUserIdToUser   SharedMemory[]  @relation("SharedMemory_fromUserIdToUser")
+  SharedMemory_SharedMemory_toUserIdToUser     SharedMemory[]  @relation("SharedMemory_toUserIdToUser")
+  SharedMindMap_SharedMindMap_fromUserIdToUser SharedMindMap[] @relation("SharedMindMap_fromUserIdToUser")
+  SharedMindMap_SharedMindMap_toUserIdToUser   SharedMindMap[] @relation("SharedMindMap_toUserIdToUser")
+  SocialUser                                   SocialUser[]
+  Session                                      Session[]
+  AccessTokens                                 AccessTokens[]
 
-  @@id([memid, chunkid])
-}
-
-model Session {
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime
-  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ConnectedNotionPages ConnectedNotionPages[]
+  ConnectedGDriveFiles ConnectedGDriveFiles[]
+  MindMap              MindMap[]
 }
 
 model SocialUser {
@@ -165,12 +157,73 @@ model SocialUser {
   @@index([userId])
 }
 
+model memory_search_vector {
+  memid         String
+  chunkid       String
+  search_vector Unsupported("tsvector")?
+
+  @@id([memid, chunkid])
+}
+
 model VerificationToken {
   identifier String
   token      String
   expires    DateTime
 
   @@id([identifier, token])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AccessTokens {
+  userId        String
+  platform      String
+  token         String
+  botId         String?
+  workspaceName String?
+  workspaceId   String?
+  expires       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([userId, platform])
+}
+
+model ConnectedNotionPages {
+  userId        String
+  pageId        String
+  state         String
+  workspaceName String
+  title         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  User          User     @relation(fields: [userId], references: [id])
+
+  @@id([userId, pageId])
+}
+
+model ConnectedGDriveFiles {
+  userId    String
+  fileId    String
+  state     String
+  name      String
+  mimeType  String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
+
+  @@id([userId, fileId])
 }
 
 enum AccountType {

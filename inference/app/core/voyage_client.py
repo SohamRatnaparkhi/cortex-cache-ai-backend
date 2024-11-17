@@ -1,3 +1,4 @@
+import os
 import time
 from collections import namedtuple
 from typing import List
@@ -8,7 +9,9 @@ from dotenv import load_dotenv
 from app.schemas.memory.ApiModel import Results, ResultsAfterReRanking
 from app.utils.app_logger_config import logger
 
-load_dotenv()
+if os.path.exists(".env"):
+    load_dotenv()
+
 
 vo = voyageai.AsyncClient()
 
@@ -42,7 +45,7 @@ async def get_embeddings(documents: list[str]):
         return []
 
 
-async def re_rank_data(data: List[Results], k: int, query: str):
+async def re_rank_data(data: List[Results], k: int, query: str, threshold=0.4):
     try:
         re_ranking_results: List[RerankingResult] = []
         documents = [d.mem_data for d in data]
@@ -66,6 +69,8 @@ async def re_rank_data(data: List[Results], k: int, query: str):
             # Link document data with their memId and chunkId
 
             for result in re_ranking_results:
+                if result.relevance_score < threshold:
+                    continue
                 final_data.append(
                     ResultsAfterReRanking(
                         memId=data[result.index].memId,

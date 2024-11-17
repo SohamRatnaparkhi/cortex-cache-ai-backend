@@ -1,11 +1,6 @@
-import os
-from typing import Dict, Optional
 
-import jwt
-from dotenv import load_dotenv
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from app.schemas.query.ApiModel import QueryRequest
 from app.services.query import (stream_response, user_multi_query_service2,

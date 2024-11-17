@@ -5,9 +5,9 @@ from langchain_anthropic import ChatAnthropic
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 
-load_dotenv()
+if os.path.exists(".env"):
+    load_dotenv()
 
-load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPEN_API_KEY = os.getenv("OPENAI_API_KEY")
