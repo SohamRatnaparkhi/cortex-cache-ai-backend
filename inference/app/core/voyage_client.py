@@ -219,6 +219,7 @@ async def unified_rerank(
                             url=web_data[original_idx]['url'],
                             content=web_data[original_idx]['content'],
                             additional_info=web_data[original_idx]['additional_info'],
+                            source=web_data[original_idx]['source'],
                             score=result.relevance_score,
                         )
                     )

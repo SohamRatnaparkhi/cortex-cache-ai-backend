@@ -101,6 +101,20 @@ async def handle_query_response(
 
         logger.info(f"Web based reranking: {web_based_reranking}")
 
+        #  make web citations
+        web_citations = []
+
+        if web_based_reranking:
+            web_citations = [
+                {
+                    "url": res["url"],
+                    "title": res["title"],
+                    "content": res["content"],
+                    "source": res["source"] if "source" in res else "web"
+                }
+                for res in web_based_reranking
+            ]
+
         chunk_ids = [res.chunkId for res in memory_based_reranking]
         mem_ids = [res.memId for res in memory_based_reranking]
         memory_results = memory_based_reranking
@@ -113,7 +127,7 @@ async def handle_query_response(
             user_query=query.query,
             conversationFound=has_conversation,
             content=query.query,
-            web_citations=web_results
+            web_citations=web_citations
         )
 
         if not query.use_memory:
