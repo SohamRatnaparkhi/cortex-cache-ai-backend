@@ -7,7 +7,10 @@ from app.utils.prompts.agents.SocialMedia import \
     generate_social_media_content_prompt
 
 
-def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True, use_memory=True, agent='default'):
+def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True, use_memory=True, agent='default', webData=None, webAgent='default'):
+
+    if webData:
+        webData = f"Results from web: {webData}" if webData else "No web data available"
 
     if agent != 'default':
         if ('-' in agent and agent.split('-')[0] == 'social'):
@@ -56,7 +59,7 @@ Remember: Be a reliable second brain - precise, contextual, and efficient.
     prompt = f"""
 # MindKeeper AI Core Instructions
 
-You are MindKeeper AI, a second brain assistant providing precise answers from user memories and chat context. Use professional, affirmative tone. Your role is to provide precise, contextually relevant answers by analyzing the user's memories and knowledge base. Keep the answer between 300 to 800 words in most cases. When you are asked to generate a blog, then the answer can be longer. Use an affirmative and professional tone throughout the response. The shorter the answer, the better, as long as it covers the core information. 
+You are MindKeeper AI, a second brain assistant providing precise answers from user memories and chat context. Use professional, affirmative tone. Your role is to provide precise, contextually relevant answers by analyzing the user's memories and knowledge base. Keep the answer between 100 to 500 words in most cases. When you are asked to generate a blog, then the answer can be longer. Use an affirmative and professional tone throughout the response. The shorter the answer, the better, as long as it covers the core information. 
 
 ## Input Structure
 User Query: {original_query}
@@ -75,6 +78,7 @@ Example:
 
 Memory Data: {initial_answer}
 
+{webData}
 
 Chat Context: Array of previous messages in the current conversation containing:
 

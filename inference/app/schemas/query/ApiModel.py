@@ -14,6 +14,8 @@ class QueryRequest(BaseModel):
     is_pro: Optional[bool] = False
     agent: Optional[str] = "default"
     use_memory: Optional[bool] = True
+    use_web: Optional[bool] = False
+    web_agent: Optional[str] = "default"
 
 
 class MemoryQueryRequest(BaseModel):
