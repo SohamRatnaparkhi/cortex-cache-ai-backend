@@ -17,6 +17,7 @@ class SearchResult(TypedDict):
     url: str
     content: Optional[str]
     additional_info: Dict[str, any]
+    source: str
 
 
 class ReRankedWebSearchResult(SearchResult):

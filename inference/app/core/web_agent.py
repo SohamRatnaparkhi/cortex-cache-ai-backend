@@ -58,6 +58,7 @@ class WebAgent:
             formatted_result = SearchResult(
                 title=result.get("title", ""),
                 url=result.get("url", ""),
+                source="web",
                 content=result.get("content", "") + full_content,
                 additional_info={}
             )
@@ -84,6 +85,7 @@ class WebAgent:
                 title=result.get("title", ""),
                 url=result.get("url", ""),
                 content=result.get("content", ""),
+                source="youtube",
                 additional_info={
                     "duration": result.get("duration", ""),
                     "views": result.get("views", ""),
@@ -117,6 +119,7 @@ class WebAgent:
                 title=result.get("title", ""),
                 url=result.get("url", ""),
                 content=result.get("content", "") + full_content,
+                source="reddit",
                 additional_info={
                     "subreddit": result.get("subreddit", ""),
                     "score": result.get("score", ""),
@@ -150,6 +153,7 @@ class WebAgent:
                 title=result.get("title", ""),
                 url=result.get("url", ""),
                 content=result.get("content", "") + readme_content,
+                source="github",
                 additional_info={
                     "language": result.get("language", ""),
                     "stars": result.get("stars", ""),
@@ -178,6 +182,7 @@ class WebAgent:
                 title=result.get("title", ""),
                 url=result.get("url", ""),
                 content=result.get("content", ""),
+                source="arxiv",
                 additional_info={
                     "authors": result.get("author", ""),
                     "published_date": result.get("publishedDate", ""),
@@ -208,6 +213,7 @@ class WebAgent:
                 title=result.get("title", ""),
                 url=result.get("url", ""),
                 content=result.get("content", ""),
+                source="images",
                 additional_info={
                     "img_src": result.get("img_src", ""),
                     "thumbnail": result.get("thumbnail", ""),
@@ -238,6 +244,8 @@ class WebAgent:
         # Convert string to AgentType if needed
         if isinstance(agent_type, str):
             agent_type = AgentType(agent_type.lower())
+
+        print("Searching for:", query, agent_type)
 
         # Get search options for this agent type
         search_opts = self._get_search_options(agent_type)

@@ -16,6 +16,7 @@ from app.utils.prompts.final_ans import prompt as final_ans_prompt
 from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
                                              get_final_pro_answer_prompt)
 from app.utils.prompts.query import generate_query_refinement_prompt
+from app.utils.web_results_fetcher import get_web_results
 
 
 async def process_user_query(query: QueryRequest, is_stream: bool = False) -> Dict:
@@ -66,7 +67,7 @@ async def handle_query_response(
         memory_results = []
         chunk_ids = []
         mem_ids = []
-        web_results = []
+        web_results = None
 
         if query.use_memory:
             memory_results = await get_final_results_from_memory(
@@ -77,11 +78,9 @@ async def handle_query_response(
             )
 
         if query.use_web:
-            # TODO: IMPLEMENT ALL THE BELOW FUNCTIONS
             # get web results based on query and agents selected using multi-threading
-            # web_results = await get_web_results(query.query, query.web_agents)
-            # web results will have reranked results, url, title, content, additional_info and score
-            # get necessary prompts to pass to get final prompt function
+            web_results = await get_web_results(llm_query, query.web_sources)
+            # TODO: get necessary prompts to pass to get final prompt function
             # get citations to pass to inset_message_in_db
             pass
 
@@ -100,6 +99,8 @@ async def handle_query_response(
         memory_based_reranking = reranked_results[0]
         web_based_reranking = reranked_results[1]
 
+        logger.info(f"Web based reranking: {web_based_reranking}")
+
         chunk_ids = [res.chunkId for res in memory_based_reranking]
         mem_ids = [res.memId for res in memory_based_reranking]
         memory_results = memory_based_reranking
@@ -111,7 +112,8 @@ async def handle_query_response(
             conversation_id=query.conversation_id,
             user_query=query.query,
             conversationFound=has_conversation,
-            content=query.query
+            content=query.query,
+            web_citations=web_results
         )
 
         if not query.use_memory:
