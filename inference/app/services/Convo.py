@@ -47,7 +47,7 @@ async def get_convo_summary(conversation_id: str):
     try:
         context = await get_chat_context(conversation_id, limit=3)
         print(f"Context: {context}")
-        res = summary_llm.invoke(context[0])
+        res = summary_llm.invoke(context.context)
         await prisma.conversation.update(
             where={"id": conversation_id},
             data={"summary": res.content}

@@ -28,3 +28,14 @@ class DBResponse(BaseModel):
     memId: str
     chunk_id: str
     score: float
+
+
+class ChatContext(BaseModel):
+    context: str
+    query_context: str
+    has_conversation: bool
+
+
+class MessageContent(BaseModel):
+    user: str
+    ai: Optional[str] = None

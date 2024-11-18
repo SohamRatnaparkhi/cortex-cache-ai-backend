@@ -3,7 +3,8 @@ from prisma.types import MemoryCreateInput, MemoryUpdateInput
 
 from app.core import voyage_client
 from app.prisma.prisma import prisma
-from app.schemas.query.ApiModel import MemoryQueryRequest, QueryRequest
+from app.schemas.query.query_related_types import (MemoryQueryRequest,
+                                                   QueryRequest)
 from app.services.Memory import get_final_results_from_memory
 from app.services.MemoryOps import (CombinedMemory, CombinedMemoryChunk,
                                     get_all_memories_by_user_id,
