@@ -1,7 +1,7 @@
 import os
 import time
 from collections import namedtuple
-from typing import List
+from typing import List, Tuple
 
 import voyageai
 from dotenv import load_dotenv
@@ -132,3 +132,102 @@ async def re_rank_web_data(data: List[SearchResult], k: int, query: str, thresho
     except Exception as e:
         logger.error(f"Error re-ranking data: {e}")
         return None
+
+
+async def unified_rerank(
+    memory_data: List[Results] = None,
+    web_data: List[SearchResult] = None,
+    k: int = 10,
+    query: str = "",
+    memory_threshold: float = 0.4,
+    web_threshold: float = 0.3,
+) -> Tuple[List[ResultsAfterReRanking], List[ReRankedWebSearchResult]]:
+    """
+    Unified function to rerank both memory and web data simultaneously.
+
+    Args:
+        memory_data: List of Results objects (can be empty or None)
+        web_data: List of SearchResult objects (can be empty or None)
+        k: Number of top results to return for each type
+        query: Query string for reranking
+        memory_threshold: Threshold score for memory results
+        web_threshold: Threshold score for web results
+
+    Returns:
+        Tuple containing two lists: (reranked_memory_data, reranked_web_data)
+        Either list may be empty if input was empty/None
+    """
+    try:
+        # Initialize empty results
+        memory_results: List[ResultsAfterReRanking] = []
+        web_results: List[ReRankedWebSearchResult] = []
+
+        # Prepare combined documents for reranking
+        documents = []
+        type_markers = []  # To track the source and index of each document
+
+        # Add memory data if present
+        if memory_data:
+            for idx, item in enumerate(memory_data):
+                documents.append(item.mem_data)
+                type_markers.append(('memory', idx))
+
+        # Add web data if present
+        if web_data:
+            for idx, item in enumerate(web_data):
+                if item.get('content'):  # Check if content exists
+                    documents.append(item['content'])
+                    type_markers.append(('web', idx))
+
+        if not documents:  # If no documents to process
+            return [], []
+
+        # Process documents in batches
+        all_reranking_results: List[RerankingResult] = []
+        try:
+            for i in range(0, len(documents), ReRankingConfig.BATCH_LIMIT):
+                batch = documents[i:i + ReRankingConfig.BATCH_LIMIT]
+                res = await vo.rerank(
+                    model=ReRankingConfig.MODEL,
+                    documents=batch,
+                    query=query,
+                    top_k=k,
+                )
+                all_reranking_results.extend(res.results)
+        except Exception as e:
+            logger.error(f"Error in batch reranking: {e}")
+            return [], []
+
+        # Process results and separate by type
+        try:
+            for result in all_reranking_results:
+                doc_type, original_idx = type_markers[result.index]
+
+                if doc_type == 'memory' and result.relevance_score >= memory_threshold:
+                    memory_results.append(
+                        ResultsAfterReRanking(
+                            memId=memory_data[original_idx].memId,
+                            chunkId=memory_data[original_idx].chunkId,
+                            mem_data=memory_data[original_idx].mem_data,
+                            score=result.relevance_score,
+                        )
+                    )
+                elif doc_type == 'web' and result.relevance_score >= web_threshold:
+                    web_results.append(
+                        ReRankedWebSearchResult(
+                            title=web_data[original_idx]['title'],
+                            url=web_data[original_idx]['url'],
+                            content=web_data[original_idx]['content'],
+                            additional_info=web_data[original_idx]['additional_info'],
+                            score=result.relevance_score,
+                        )
+                    )
+        except Exception as e:
+            logger.error(f"Error processing reranking results: {e}")
+            return memory_results, web_results
+
+        return memory_results, web_results
+
+    except Exception as e:
+        logger.error(f"Error in unified reranking: {e}")
+        return [], []

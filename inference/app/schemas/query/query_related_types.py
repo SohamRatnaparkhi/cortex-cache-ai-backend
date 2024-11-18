@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ class QueryRequest(BaseModel):
     agent: Optional[str] = "default"
     use_memory: Optional[bool] = True
     use_web: Optional[bool] = False
-    web_agent: Optional[str] = "default"
+    web_sources: Optional[List[str]] = []
 
 
 class MemoryQueryRequest(BaseModel):

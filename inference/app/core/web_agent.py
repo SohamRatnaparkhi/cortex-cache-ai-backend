@@ -58,8 +58,7 @@ class WebAgent:
             formatted_result = SearchResult(
                 title=result.get("title", ""),
                 url=result.get("url", ""),
-                content=full_content or result.get(
-                    "content", ""),  # Use full content if available
+                content=result.get("content", "") + full_content,
                 additional_info={}
             )
             formatted_results.append(formatted_result)
@@ -117,7 +116,7 @@ class WebAgent:
             formatted_result = SearchResult(
                 title=result.get("title", ""),
                 url=result.get("url", ""),
-                content=full_content or result.get("content", ""),
+                content=result.get("content", "") + full_content,
                 additional_info={
                     "subreddit": result.get("subreddit", ""),
                     "score": result.get("score", ""),
@@ -150,7 +149,7 @@ class WebAgent:
             formatted_result = SearchResult(
                 title=result.get("title", ""),
                 url=result.get("url", ""),
-                content=readme_content or result.get("content", ""),
+                content=result.get("content", "") + readme_content,
                 additional_info={
                     "language": result.get("language", ""),
                     "stars": result.get("stars", ""),

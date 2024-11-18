@@ -34,12 +34,15 @@ async def insert_message_in_db(query_id: str, chunk_ids: list[str], memIds: list
             )
         # check if conversation exists
         # conversation = None
+        logger.info(conversationFound)
         if not conversationFound:
+            logger.debug("Creating conversation")
             conversation = await prisma.conversation.create({
                 "id": conversation_id,
                 "userId": user_id,
                 "memoryIds": memIds,
             })
+            logger.debug("Created conversation")
             logger.info(f"Conversation created: {conversation}")
             if not conversation:
                 raise ValueError("Conversation not created")

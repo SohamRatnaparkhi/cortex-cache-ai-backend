@@ -12,6 +12,8 @@ def get_final_pro_answer_prompt(original_query, refined_query, context, initial_
     if webData:
         webData = f"Results from web: {webData}" if webData else "No web data available"
 
+    # TODO: implement web specific prompts
+
     if agent != 'default':
         if ('-' in agent and agent.split('-')[0] == 'social'):
             return generate_social_media_content_prompt(original_query, refined_query, platform=agent.split('-')[1], memory_data=initial_answer, context=context)
@@ -104,7 +106,7 @@ NOTE THAT: Don't talk about answer response frameworks or guidelines at all in t
 - [Links](https://...): Web links (if any)
 
 ## Core Rules
-1. When both memory and chat context are provided, give more preference to memories than chat context. If the query is NOT RELATED TO A PERTICULAR CHAT CONTEXT ENTRY, THEN STRICTLY IGNORE IT.
+1. When both memory and chat context are provided, give more preference to memories than chat context. If the query is NOT RELATED TO A PARTICULAR CHAT CONTEXT ENTRY, THEN STRICTLY IGNORE IT.
 2. No system/process mentions
 3. Keep the answer concise and to the point
 4. Don't talk about answer response frameworks or guidelines at all.

@@ -20,11 +20,15 @@ from app.utils.prompts.query import generate_query_refinement_prompt
 
 async def process_user_query(query: QueryRequest, is_stream: bool = False) -> Dict:
     """Process user query and return either stream response or final answer."""
-    context, query_context, has_conversation = await get_chat_context(
+    chat_context = await get_chat_context(
         query.conversation_id,
         query.query_id,
         limit=2
     )
+
+    context = chat_context.context
+    query_context = chat_context.query_context
+    has_conversation = chat_context.has_conversation
 
     refined_query = preprocess_query(query.query, context)
     prompt = generate_query_refinement_prompt(
@@ -62,6 +66,7 @@ async def handle_query_response(
         memory_results = []
         chunk_ids = []
         mem_ids = []
+        web_results = []
 
         if query.use_memory:
             memory_results = await get_final_results_from_memory(
@@ -71,19 +76,33 @@ async def handle_query_response(
                 top_k=15
             )
 
-            reranked_results = await voyage_client.re_rank_data(
-                data=memory_results,
-                k=10,
-                query=llm_query
-            )
+        if query.use_web:
+            # TODO: IMPLEMENT ALL THE BELOW FUNCTIONS
+            # get web results based on query and agents selected using multi-threading
+            # web_results = await get_web_results(query.query, query.web_agents)
+            # web results will have reranked results, url, title, content, additional_info and score
+            # get necessary prompts to pass to get final prompt function
+            # get citations to pass to inset_message_in_db
+            pass
 
-            if not reranked_results:
-                raise Exception("Failed to re-rank results")
+        reranked_results = await voyage_client.unified_rerank(
+            k=15,
+            memory_data=memory_results,
+            query=llm_query,
+            web_data=web_results,
+            memory_threshold=0.4,
+            web_threshold=0.3
+        )
 
-            chunk_ids = [res.chunkId for res in reranked_results]
-            mem_ids = [res.memId for res in reranked_results]
-            memory_results = reranked_results
+        if not reranked_results:
+            raise Exception("Failed to re-rank results")
 
+        memory_based_reranking = reranked_results[0]
+        web_based_reranking = reranked_results[1]
+
+        chunk_ids = [res.chunkId for res in memory_based_reranking]
+        mem_ids = [res.memId for res in memory_based_reranking]
+        memory_results = memory_based_reranking
         message = await insert_message_in_db(
             query_id=query.query_id,
             chunk_ids=chunk_ids,
