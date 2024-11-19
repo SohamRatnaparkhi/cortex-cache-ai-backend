@@ -140,19 +140,20 @@ async def handle_query_response(
         memory_data = format_memory_xml(llm_query, memory_results)
 
         # TODO: FORMAT WEB RESULTS
-        formatter = WebDataFormatter(ContentLimits(
-            MAX_RESULTS=5,
-            MAX_CONTENT_LENGTH=300,
-            MAX_TOTAL_LENGTH=1000,
-            MIN_SENTENCE_SCORE=0.3
-        ))
+        web_data = ""
+        if web_based_reranking and len(web_based_reranking) > 0:
+            formatter = WebDataFormatter(ContentLimits(
+                MAX_RESULTS=5,
+                MAX_CONTENT_LENGTH=1000,
+                MAX_TOTAL_LENGTH=4000,
+                MIN_SENTENCE_SCORE=0.3
+            ))
 
-        formatted_data, stats = formatter.format_web_data(
-            llm_query, web_based_reranking)
+            formatted_data, stats = formatter.format_web_data(
+                llm_query, web_based_reranking)
+            web_data = formatted_data
 
         print(stats)
-
-        web_data = formatted_data
 
         if is_stream:
             return {
