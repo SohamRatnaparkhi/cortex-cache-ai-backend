@@ -5,6 +5,7 @@ from langchain.schema import HumanMessage
 from app.core import voyage_client
 from app.prisma.prisma import prisma
 from app.schemas.memory.ApiModel import Results
+from app.schemas.prompt_context import PromptContext
 from app.schemas.query.query_related_types import (ChatContext, MessageContent,
                                                    QueryRequest)
 from app.services.Memory import get_final_results_from_memory
@@ -13,9 +14,11 @@ from app.utils.app_logger_config import logger
 from app.utils.llms import get_answer_llm
 from app.utils.Preprocessor import improve_query, preprocess_query
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
+from app.utils.prompts.frameworks import NO_MEMORY_PROMPT
 from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
                                              get_final_pro_answer_prompt)
 from app.utils.prompts.query import generate_query_refinement_prompt
+from app.utils.web_formatter import ContentLimits, WebDataFormatter
 from app.utils.web_results_fetcher import get_web_results
 
 
@@ -131,15 +134,31 @@ async def handle_query_response(
         )
 
         if not query.use_memory:
-            return handle_response_without_memory(query, llm_query, message.id, is_stream)
+            if not query.use_web:
+                return handle_response_without_memory(query, llm_query, message.id, is_stream)
 
         memory_data = format_memory_xml(llm_query, memory_results)
+
+        # TODO: FORMAT WEB RESULTS
+        formatter = WebDataFormatter(ContentLimits(
+            MAX_RESULTS=5,
+            MAX_CONTENT_LENGTH=300,
+            MAX_TOTAL_LENGTH=1000,
+            MIN_SENTENCE_SCORE=0.3
+        ))
+
+        formatted_data, stats = formatter.format_web_data(
+            llm_query, web_based_reranking)
+
+        print(stats)
+
+        web_data = formatted_data
 
         if is_stream:
             return {
                 "curr_ans": memory_data,
                 "query": llm_query,
-                "prompt": get_pro_answer_prompt(query, llm_query, context, memory_data)
+                "prompt": get_pro_answer_prompt(query, llm_query, context, memory_data, web_data)
                 if query.is_pro else final_ans_prompt + memory_data,
                 "messageId": message.id
             }
@@ -177,7 +196,7 @@ def handle_response_without_memory(query: QueryRequest, llm_query: str, message_
     return {
         "curr_ans": "",
         "query": llm_query,
-        "prompt": "",
+        "prompt": f"User query: {llm_query}\n\n" + NO_MEMORY_PROMPT,
         "messageId": message_id
     } if is_stream else {
         "query": llm_query,
@@ -186,16 +205,21 @@ def handle_response_without_memory(query: QueryRequest, llm_query: str, message_
     }
 
 
-def get_pro_answer_prompt(query: QueryRequest, llm_query: str, context: str, memory_data: str) -> str:
+def get_pro_answer_prompt(query: QueryRequest, llm_query: str, context: str, memory_data: str, web_data: str = "") -> str:
     """Get prompt for pro users."""
-    return get_final_pro_answer_prompt(
+    prompt_context = PromptContext(
         original_query=query.query,
         refined_query=llm_query,
         context=context,
         initial_answer=memory_data,
         is_stream=True,
         use_memory=query.use_memory,
-        agent=query.agent
+        agent=query.agent,
+        web_agents=query.web_sources,
+        web_data=web_data
+    )
+    return get_final_pro_answer_prompt(
+        prompt_context,
     )
 
 
