@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -14,6 +14,8 @@ class QueryRequest(BaseModel):
     is_pro: Optional[bool] = False
     agent: Optional[str] = "default"
     use_memory: Optional[bool] = True
+    use_web: Optional[bool] = False
+    web_sources: Optional[List[str]] = []
 
 
 class MemoryQueryRequest(BaseModel):
@@ -26,3 +28,14 @@ class DBResponse(BaseModel):
     memId: str
     chunk_id: str
     score: float
+
+
+class ChatContext(BaseModel):
+    context: str
+    query_context: str
+    has_conversation: bool
+
+
+class MessageContent(BaseModel):
+    user: str
+    ai: Optional[str] = None

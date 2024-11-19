@@ -56,17 +56,28 @@ model Memory {
 }
 
 model Message {
-  id             String       @id
-  content        String
-  sender         String
-  createdAt      DateTime     @default(now())
-  conversationId String
-  memoryId       String[]     @default([])
-  chunkIds       String[]     @default([])
-  questionId     String?
-  Conversation   Conversation @relation(fields: [conversationId], references: [id])
+  id                 String               @id
+  content            String
+  sender             String
+  createdAt          DateTime             @default(now())
+  conversationId     String
+  memoryId           String[]             @default([])
+  chunkIds           String[]             @default([])
+  questionId         String?
+  Conversation       Conversation         @relation(fields: [conversationId], references: [id])
+  WebSearchCitations WebSearchCitations[]
 
   @@index([conversationId, createdAt])
+}
+
+model WebSearchCitations {
+  id        String  @id
+  url       String
+  title     String
+  content   String
+  messageId String
+  source    String
+  Message   Message @relation(fields: [messageId], references: [id])
 }
 
 model MindMap {

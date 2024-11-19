@@ -2,9 +2,8 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from app.schemas.query.ApiModel import QueryRequest
-from app.services.query import (stream_response, user_multi_query_service2,
-                                user_query_service)
+from app.schemas.query.query_related_types import QueryRequest
+from app.services.query import process_user_query, stream_response
 from app.utils.jwt import get_credentials
 
 router = APIRouter(
@@ -13,19 +12,11 @@ router = APIRouter(
 )
 
 
-@router.post('/multiple')
-async def handle_user_query(
-    query: QueryRequest
-):
-    # return await user_query_service(query)
-    return await user_multi_query_service2(query)
-
-
 @router.post('/single')
 async def handle_user_query(
     query: QueryRequest
 ):
-    return await user_query_service(query, is_stream=False)
+    return await process_user_query(query, is_stream=False)
 
 
 @router.post("/stream")
@@ -40,7 +31,7 @@ async def stream_llm_response(query: QueryRequest, request: Request):
 
         print("Query from user: ", query)
 
-        obj = await user_query_service(query, is_stream=True)
+        obj = await process_user_query(query, is_stream=True)
         return StreamingResponse(stream_response(obj["prompt"], obj["messageId"], llm_type=query.llm or 'llama-3.1-70b'), media_type="text/event-stream")
 
     except Exception as e:
