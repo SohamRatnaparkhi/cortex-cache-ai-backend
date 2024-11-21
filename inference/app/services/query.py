@@ -1,8 +1,12 @@
+import os
 from typing import AsyncIterator, Dict, List, Optional, Set
 
+from dotenv import load_dotenv
 from langchain.schema import HumanMessage
 
 from app.core import voyage_client
+from app.core.pxity_client import (CodeAgent, RedditAgent, ResearchAgent,
+                                   VideoAgent, WebAgent)
 from app.prisma.prisma import prisma
 from app.schemas.memory.ApiModel import Results
 from app.schemas.prompt_context import PromptContext
@@ -20,6 +24,16 @@ from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
 from app.utils.prompts.query import generate_query_refinement_prompt
 from app.utils.web_formatter import ContentLimits, WebDataFormatter
 from app.utils.web_results_fetcher import get_web_results
+
+load_dotenv()
+
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+
+pxity_web_agent = WebAgent(api_key=PERPLEXITY_API_KEY)
+pxity_code_agent = CodeAgent(api_key=PERPLEXITY_API_KEY)
+pxity_research_agent = ResearchAgent(api_key=PERPLEXITY_API_KEY)
+pxity_video_agent = VideoAgent(api_key=PERPLEXITY_API_KEY)
+pxity_reddit_agent = RedditAgent(api_key=PERPLEXITY_API_KEY)
 
 
 async def process_user_query(query: QueryRequest, is_stream: bool = False) -> Dict:
@@ -121,17 +135,6 @@ async def handle_query_response(
         chunk_ids = [res.chunkId for res in memory_based_reranking]
         mem_ids = [res.memId for res in memory_based_reranking]
         memory_results = memory_based_reranking
-        message = await insert_message_in_db(
-            query_id=query.query_id,
-            chunk_ids=chunk_ids,
-            memIds=mem_ids,
-            user_id=query.user_id,
-            conversation_id=query.conversation_id,
-            user_query=query.query,
-            conversationFound=has_conversation,
-            content=query.query,
-            web_citations=web_citations
-        )
 
         if not query.use_memory:
             if not query.use_web:
@@ -152,8 +155,28 @@ async def handle_query_response(
             formatted_data, stats = formatter.format_web_data(
                 llm_query, web_based_reranking)
             web_data = formatted_data
+        else:
+            if query.use_web:
+                web_data = await get_results_based_on_perplexity_agent(
+                    llm_query, query.web_sources[0])
+                # TODO: handle citations logic
+                if web_data == "":
+                    web_data = "No web results found."
 
-        # print(stats)
+        message = await insert_message_in_db(
+            query_id=query.query_id,
+            chunk_ids=chunk_ids,
+            memIds=mem_ids,
+            user_id=query.user_id,
+            conversation_id=query.conversation_id,
+            user_query=query.query,
+            conversationFound=has_conversation,
+            content=query.query,
+            web_citations=web_citations
+        )
+
+        if query.use_web:
+            logger.info(f"Web data: {web_data}")
 
         if is_stream:
             return {
@@ -204,6 +227,41 @@ def handle_response_without_memory(query: QueryRequest, llm_query: str, message_
         "final_ans": "",
         "messageId": message_id
     }
+
+
+async def get_results_based_on_perplexity_agent(query: str, agent: str) -> str:
+    """Get results based on Perplexity agent."""
+    if agent == "web":
+        return format_pxity_results_to_xml(await pxity_web_agent.search(query), query, "web")
+    elif agent == "github":
+        return format_pxity_results_to_xml(await pxity_code_agent.search(query), query, "code")
+    elif agent == "arxiv":
+        return format_pxity_results_to_xml(await pxity_research_agent.search(query), query, "research")
+    elif agent == "youtube":
+        return format_pxity_results_to_xml(await pxity_video_agent.search(query), query, "video")
+    elif agent == "reddit":
+        return format_pxity_results_to_xml(await pxity_reddit_agent.search(query), query, "reddit")
+    else:
+        return format_pxity_results_to_xml(await pxity_web_agent.search(query), query, "web")
+
+
+def format_pxity_results_to_xml(results: list[dict], query: str, agent='web') -> str:
+    print(results)
+    xml_content = ''
+    score = 0.85
+    for result in results["results"]:
+        print(result.keys())
+        content = result["content"] or ""
+        citation = result["citation_url"] or ""
+
+        xml_content += f"\t<data>{content}</data>\n"
+        xml_content += f"\t<url>{citation}</url>\n"
+        xml_content += f"\t<source>{agent}</source>\n"
+        xml_content += f"\t<score>{score}</score>\n"
+
+    score -= 0.5
+
+    return f"<question>{query}</question>\n<content>\n{xml_content}</content>"
 
 
 def get_pro_answer_prompt(query: QueryRequest, llm_query: str, context: str, memory_data: str, web_data: str = "") -> str:
