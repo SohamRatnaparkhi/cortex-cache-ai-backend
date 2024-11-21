@@ -4,42 +4,64 @@ FROM python:3.10.0-slim
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and Prisma files first
+# Create a non-root user
+RUN useradd -m -u 1000 appuser
+
+# Install system dependencies
+RUN apt-get update -y && \
+    apt-get install -y openssl dos2unix curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set up environment variables
+ENV HOME=/home/appuser
+ENV PYTHONUSERBASE=/home/appuser/.local
+ENV PYTHONPATH=/home/appuser/.local/lib/python3.10/site-packages:/app
+ENV PATH=/home/appuser/.local/bin:$PATH
+ENV PRISMA_BINARY_TARGETS_PATH=/app/.prisma/binaries
+ENV PRISMA_CACHE_DIR=/app/.prisma/cache
+# Set the query engine path to a writable location
+ENV PRISMA_QUERY_ENGINE_BINARY=/app/.prisma/binaries/query-engine
+ENV PRISMA_SCHEMA_ENGINE_BINARY=/app/.prisma/binaries/schema-engine
+
+# Create necessary directories and set permissions
+RUN mkdir -p /app/.prisma/binaries && \
+    mkdir -p /app/.prisma/cache && \
+    mkdir -p /home/appuser/.local/lib/python3.10/site-packages && \
+    chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /home/appuser
+
+# Copy only the necessary files
 COPY requirements.txt .
-COPY prisma/ ./prisma/
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-ENV PRISMA_BINARY_TARGETS_PATH=/tmp/prisma-binaries
-RUN mkdir -p /tmp/prisma-binaries
-
-ENV PRISMA_CACHE_DIR=/tmp/prisma-cache
-RUN mkdir -p /tmp/prisma-cache
-
-RUN apt-get update -y && apt-get install -y openssl
-
-
-
-# Install and generate Prisma client
-RUN pip install prisma
-RUN prisma generate
-
-# Copy Prisma query engine to /tmp for use in Lambda
-RUN cp $(find /root/.cache/prisma-python/binaries -name 'query-engine-*') /tmp/prisma-query-engine
-
-# Set environment variable for Prisma query engine binary location
-ENV PRISMA_QUERY_ENGINE_BINARY=/tmp/prisma-query-engine
-
-
-# Copy your FastAPI application and entry script
 COPY app/ ./app/
+COPY prisma/ ./prisma/
 COPY entry.sh .
-RUN chmod +x entry.sh
 
-# Expose the port FastAPI will run on (for local testing)
+# Fix permissions and line endings
+RUN dos2unix entry.sh && \
+    chmod +x entry.sh && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user for installations
+USER appuser
+
+# Install Python dependencies including Prisma
+RUN pip install --user awslambdaric mangum && \
+    pip install --user -r requirements.txt && \
+    pip install --user prisma
+
+# Generate Prisma client and copy binary to permanent location
+WORKDIR /app/prisma
+RUN python -m prisma generate && \
+    # Ensure the binary is copied to our specified location
+    cp -r /home/appuser/.local/lib/python3.10/site-packages/prisma/query-engine-* /app/.prisma/binaries/query-engine && \
+    chmod +x /app/.prisma/binaries/query-engine
+
+# Switch back to app directory
+WORKDIR /app
+
+# Expose the port FastAPI will run on
 EXPOSE 8080
 
 # Use entry script as entrypoint
-ENTRYPOINT [ "./entry.sh" ]
-
+ENTRYPOINT ["./entry.sh"]

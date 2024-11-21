@@ -153,7 +153,7 @@ async def handle_query_response(
                 llm_query, web_based_reranking)
             web_data = formatted_data
 
-        print(stats)
+        # print(stats)
 
         if is_stream:
             return {
