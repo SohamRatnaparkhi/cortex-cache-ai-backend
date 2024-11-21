@@ -2,8 +2,10 @@ version: '3.8'
 
 services:
   api:
-    build: .
     ports:
-      - "8081:8081"
+      - "8001:80"
     env_file:
       - .env
+    build:
+      context: .
+      dockerfile: Dockerfile
