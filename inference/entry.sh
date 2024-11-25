@@ -12,13 +12,13 @@ mkdir -p /app/.prisma/binaries
 mkdir -p /app/.prisma/cache
 
 # Verify query engine exists
-if [ -f "$PRISMA_QUERY_ENGINE_BINARY" ]; then
-    echo "Query engine found at $PRISMA_QUERY_ENGINE_BINARY"
-    ls -l "$PRISMA_QUERY_ENGINE_BINARY"
-else
-    echo "Query engine not found at $PRISMA_QUERY_ENGINE_BINARY"
-    exit 1
-fi
+# if [ -f "$PRISMA_QUERY_ENGINE_BINARY" ]; then
+#     echo "Query engine found at $PRISMA_QUERY_ENGINE_BINARY"
+#     ls -l "$PRISMA_QUERY_ENGINE_BINARY"
+# else
+#     echo "Query engine not found at $PRISMA_QUERY_ENGINE_BINARY"
+#     exit 1
+# fi
 
 if [ -z "${AWS_LAMBDA_RUNTIME_API}" ]; then
     # If not in Lambda environment, run local server

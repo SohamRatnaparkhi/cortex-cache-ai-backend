@@ -1,8 +1,5 @@
 import os
-from typing import AsyncIterator, Dict, List, Optional, Set
-
-from dotenv import load_dotenv
-from langchain.schema import HumanMessage
+from typing import AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 
 from app.core import voyage_client
 from app.core.pxity_client import (CodeAgent, RedditAgent, ResearchAgent,
@@ -24,6 +21,8 @@ from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
 from app.utils.prompts.query import generate_query_refinement_prompt
 from app.utils.web_formatter import ContentLimits, WebDataFormatter
 from app.utils.web_results_fetcher import get_web_results
+from dotenv import load_dotenv
+from langchain.schema import HumanMessage
 
 load_dotenv()
 
@@ -142,12 +141,11 @@ async def handle_query_response(
 
         memory_data = format_memory_xml(llm_query, memory_results)
 
-        # TODO: FORMAT WEB RESULTS
         web_data = ""
         if web_based_reranking and len(web_based_reranking) > 0:
             formatter = WebDataFormatter(ContentLimits(
                 MAX_RESULTS=5,
-                MAX_CONTENT_LENGTH=1000,
+                MAX_CONTENT_LENGTH=800,
                 MAX_TOTAL_LENGTH=4000,
                 MIN_SENTENCE_SCORE=0.3
             ))
@@ -157,9 +155,9 @@ async def handle_query_response(
             web_data = formatted_data
         else:
             if query.use_web:
-                web_data = await get_results_based_on_perplexity_agent(
+                web_data, citations = await get_results_based_on_perplexity_agent(
                     llm_query, query.web_sources[0])
-                # TODO: handle citations logic
+                web_citations.extend(citations)
                 if web_data == "":
                     web_data = "No web results found."
 
@@ -229,7 +227,7 @@ def handle_response_without_memory(query: QueryRequest, llm_query: str, message_
     }
 
 
-async def get_results_based_on_perplexity_agent(query: str, agent: str) -> str:
+async def get_results_based_on_perplexity_agent(query: str, agent: str):
     """Get results based on Perplexity agent."""
     if agent == "web":
         return format_pxity_results_to_xml(await pxity_web_agent.search(query), query, "web")
@@ -245,15 +243,21 @@ async def get_results_based_on_perplexity_agent(query: str, agent: str) -> str:
         return format_pxity_results_to_xml(await pxity_web_agent.search(query), query, "web")
 
 
-def format_pxity_results_to_xml(results: list[dict], query: str, agent='web') -> str:
+def format_pxity_results_to_xml(results: list[dict], query: str, agent='web') -> Tuple[str, List[dict]]:
     print(results)
     xml_content = ''
     score = 0.85
+    citations = []
     for result in results["results"]:
         print(result.keys())
         content = result["content"] or ""
         citation = result["citation_url"] or ""
-
+        citations.append({
+            "url": result["citation_url"],
+            "title": result["content"][0: 30],
+            "content": result["content"],
+            "source": 'web'
+        })
         xml_content += f"\t<data>{content}</data>\n"
         xml_content += f"\t<url>{citation}</url>\n"
         xml_content += f"\t<source>{agent}</source>\n"
@@ -261,7 +265,7 @@ def format_pxity_results_to_xml(results: list[dict], query: str, agent='web') ->
 
     score -= 0.5
 
-    return f"<question>{query}</question>\n<content>\n{xml_content}</content>"
+    return f"<question>{query}</question>\n<content>\n{xml_content}</content>", citations
 
 
 def get_pro_answer_prompt(query: QueryRequest, llm_query: str, context: str, memory_data: str, web_data: str = "") -> str:

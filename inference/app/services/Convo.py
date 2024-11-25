@@ -63,10 +63,6 @@ async def get_citations_on_message_id(
             where={"messageId": message_id}
         )
 
-        print(f"message: {message}")
-
-        print(f"Web citations: {web_citations}")
-
         if not message:
             raise ValueError(f"Message not found: {message_id}")
 
