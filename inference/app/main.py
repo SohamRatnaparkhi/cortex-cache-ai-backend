@@ -5,11 +5,12 @@ from fastapi import FastAPI, Request
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from mangum import Mangum
 
 from app.prisma import prisma
 
 from .api import api_router
+
+# from mangum import Mangum
 
 
 @asynccontextmanager
@@ -71,4 +72,4 @@ def read_root():
             'status': 'ok'}
 
 
-handler = Mangum(app)
+# handler = Mangum(app)

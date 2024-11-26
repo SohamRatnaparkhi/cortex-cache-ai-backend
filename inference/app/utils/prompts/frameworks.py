@@ -75,6 +75,10 @@ Start: "Based on your saved memories"
 # Key Points
 - [Main insights]
 - [Patterns found]
+
+# Follow-Up
+1. [Contextual question]
+2. [Exploration suggestion]
 ```
 """
 
@@ -91,6 +95,10 @@ Start: "Based on the information from the web"
 # Key Points
 - [Main insights]
 - [Patterns found]
+
+# Follow-Up
+1. [Contextual question]
+2. [Exploration suggestion]
 ```
 """
 

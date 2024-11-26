@@ -84,7 +84,7 @@ class WebAgent:
                 formatted_results.append(formatted_result)
 
                 # Access attributes correctly using dot notation since SearchResult is a dataclass
-                context_parts.append(f"{i}. Title: {formatted_result.title}")
+                # context_parts.append(f"{i}. Title: {formatted_result.title}")
                 context_parts.append(f"   URL: {formatted_result.url}")
                 if formatted_result.content:
                     # Split content into chunks to avoid extremely long lines

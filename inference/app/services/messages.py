@@ -62,6 +62,7 @@ async def insert_message_in_db(
             ]
 
             # Create all citations in parallel
+            print("Inserting web citations")
             return await asyncio.gather(*[
                 prisma.websearchcitations.create(data=citation)
                 for citation in citation_data

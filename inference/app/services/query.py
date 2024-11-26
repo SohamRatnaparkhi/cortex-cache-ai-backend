@@ -1,6 +1,9 @@
 import os
 from typing import AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 
+from dotenv import load_dotenv
+from langchain.schema import HumanMessage
+
 from app.core import voyage_client
 from app.core.pxity_client import (CodeAgent, RedditAgent, ResearchAgent,
                                    VideoAgent, WebAgent)
@@ -21,8 +24,6 @@ from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
 from app.utils.prompts.query import generate_query_refinement_prompt
 from app.utils.web_formatter import ContentLimits, WebDataFormatter
 from app.utils.web_results_fetcher import get_web_results
-from dotenv import load_dotenv
-from langchain.schema import HumanMessage
 
 load_dotenv()
 
@@ -115,7 +116,7 @@ async def handle_query_response(
         memory_based_reranking = reranked_results[0]
         web_based_reranking = reranked_results[1]
 
-        logger.info(f"Web based reranking: {web_based_reranking}")
+        # logger.info(f"Web based reranking: {web_based_reranking}")
 
         #  make web citations
         web_citations = []
@@ -160,7 +161,7 @@ async def handle_query_response(
                 web_citations.extend(citations)
                 if web_data == "":
                     web_data = "No web results found."
-
+        # print(web_citations)
         message = await insert_message_in_db(
             query_id=query.query_id,
             chunk_ids=chunk_ids,
@@ -307,10 +308,11 @@ async def stream_response(
 
     try:
         llm = get_answer_llm(llm_type, is_pro=True)
+        i = 0
         async for chunk in llm.astream([HumanMessage(content=prompt)]):
             chunk_text = chunk.content
             message_content.append(chunk_text)
-
+            print(f"Chunk {i}: {chunk_text}")
             # Format chunk for streaming
             chunk_data = chunk_text.replace('\n', '\\n')
             if first_chunk:
