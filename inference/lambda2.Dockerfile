@@ -4,6 +4,8 @@ FROM python:3.10.0-slim
 # Set working directory
 WORKDIR /app
 
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.1 /lambda-adapter /opt/extensions/lambda-adapter
+
 # Create a non-root user
 RUN useradd -m -u 1000 appuser
 
