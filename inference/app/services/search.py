@@ -1,10 +1,16 @@
-from dataclasses import dataclass
-from typing import List, Optional, TypedDict
+import os
+from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
+from dotenv import load_dotenv
 
 from app.schemas.web_agent import SearchResponse, SearxngSearchOptions
+
+if os.path.exists(".env"):
+    load_dotenv()
+
+SEARCH_X_NG_URL = os.getenv("SEARCH_X_NG_URL", "http://localhost:8080")
 
 
 def search_searxng(
@@ -23,7 +29,7 @@ def search_searxng(
         SearchResponse object containing results and suggestions
     """
     # Get the base URL from config
-    searxng_url = "http://localhost:8080"
+    searxng_url = SEARCH_X_NG_URL
 
     # Parse and reconstruct the URL to ensure proper formatting
     parsed_url = urlparse(searxng_url)

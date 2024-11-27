@@ -138,6 +138,17 @@ async def handle_query_response(
 
         if not query.use_memory:
             if not query.use_web:
+                message = await insert_message_in_db(
+                    query_id=query.query_id,
+                    chunk_ids=chunk_ids,
+                    memIds=mem_ids,
+                    user_id=query.user_id,
+                    conversation_id=query.conversation_id,
+                    user_query=query.query,
+                    conversationFound=has_conversation,
+                    content=query.query,
+                    web_citations=web_citations
+                )
                 return handle_response_without_memory(query, llm_query, message.id, is_stream)
 
         memory_data = format_memory_xml(llm_query, memory_results)

@@ -276,8 +276,6 @@ class WebAgent:
         if isinstance(agent_type, str):
             agent_type = AgentType(agent_type.lower())
 
-        print("Searching for:", query, agent_type)
-
         # Get search options for this agent type
         search_opts = self._get_search_options(agent_type)
 
