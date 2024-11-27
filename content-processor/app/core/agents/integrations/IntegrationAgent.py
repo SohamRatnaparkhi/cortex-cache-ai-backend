@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from typing import Generic, List, TypeVar
 
@@ -12,7 +13,8 @@ from app.utils.app_logger_config import logger
 from app.utils.chunk_processing import update_chunks
 from app.utils.Vectors import get_vectors
 
-load_dotenv()
+if (os.path.exists('.env')):
+    load_dotenv()
 
 T = TypeVar('T', NotionSpecificMd, GitSpecificMd)
 

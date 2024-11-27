@@ -3,7 +3,8 @@ import os
 import boto3
 from dotenv import load_dotenv
 
-load_dotenv()
+if (os.path.exists('.env')):
+    load_dotenv()
 
 AWS_ACCESS_KEY_ID = os.getenv("AWS_S3_cortex_cache_manager_access_key")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_S3_cortex_cache_manager_secret_key")
@@ -40,7 +41,8 @@ class S3Operations():
             response = s3.get_object(Bucket=bucket_name, Key=object_key)
             return response
         except s3.exceptions.NoSuchKey:
-            raise ValueError(f"Object with key '{object_key}' not found in bucket '{bucket_name}'")
+            raise ValueError(
+                f"Object with key '{object_key}' not found in bucket '{bucket_name}'")
         except Exception as e:
             raise RuntimeError(f"Error retrieving object from S3: {str(e)}")
 
@@ -71,6 +73,7 @@ class S3Operations():
         return response
 
     def move_object(self, source_bucket_name: str, source_object_key: str, destination_bucket_name: str, destination_object_key: str) -> dict:
-        self.copy_object(source_bucket_name, source_object_key, destination_bucket_name, destination_object_key)
+        self.copy_object(source_bucket_name, source_object_key,
+                         destination_bucket_name, destination_object_key)
         response = self.delete_object(source_object_key, source_bucket_name)
         return response

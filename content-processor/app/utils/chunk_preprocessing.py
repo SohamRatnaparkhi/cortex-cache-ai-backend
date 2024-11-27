@@ -7,7 +7,8 @@ from typing import List, Tuple
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-load_dotenv()
+if os.path.exists('.env'):
+    load_dotenv()
 MAX_CHUNK_SIZE = 20
 CONTEXT_WINDOW_SIZE = 40
 

@@ -1,3 +1,4 @@
+import os
 import time
 
 import voyageai
@@ -5,7 +6,8 @@ from dotenv import load_dotenv
 
 from app.utils.app_logger_config import logger
 
-load_dotenv()
+if (os.path.exists('.env')):
+    load_dotenv()
 
 vo = voyageai.Client()
 

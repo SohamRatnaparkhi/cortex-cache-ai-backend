@@ -4,7 +4,8 @@ import random
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+if os.path.exists('.env'):
+    load_dotenv()
 
 total_keys = os.getenv("TOTAL_JINA_AI_API_KEYS")
 start = 1
