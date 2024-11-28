@@ -8,6 +8,7 @@ import uuid
 import numpy as np
 import speech_recognition as sr
 import whisper
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
@@ -17,21 +18,32 @@ r = sr.Recognizer()
 
 model = whisper.load_model("tiny")
 
+if os.path.exists('.env'):
+    load_dotenv()
+
+TEMP_FOLDER_PATH = os.getenv("TEMP_FOLDER_PATH", "/tmp")
+
+
+TEMP_FOLDER_PATH = os.getenv("TEMP_FOLDER_PATH", "/tmp")
+
 
 def extract_audio_from_video(video_bytes):
     """Extract audio from video bytes and return audio content."""
-    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_video:
-        temp_video.write(video_bytes)
-        temp_video_path = temp_video.name
+    temp_video_path = os.path.join(
+        TEMP_FOLDER_PATH, f"temp_video_{os.urandom(4).hex()}.mp4")
 
     try:
+        with open(temp_video_path, "wb") as temp_video:
+            temp_video.write(video_bytes)
+
         video = AudioSegment.from_file(temp_video_path, format="mp4")
         audio_content = io.BytesIO()
         video.export(audio_content, format="wav")
         audio_content.seek(0)
         return audio_content.read()
     finally:
-        os.unlink(temp_video_path)
+        if os.path.exists(temp_video_path):
+            os.unlink(temp_video_path)
 
 
 def safe_float_conversion(value):
@@ -43,13 +55,14 @@ def safe_float_conversion(value):
 
 def transcribe_audio_chunk(chunk, chunk_index, lang="en"):
     """Transcribe a single audio chunk using Whisper."""
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_chunk:
-        chunk = chunk.set_frame_rate(16000).set_channels(
-            1)  # Ensure correct format
-        chunk.export(temp_chunk.name, format="wav")
-        temp_chunk_path = temp_chunk.name
+    temp_chunk_path = os.path.join(
+        TEMP_FOLDER_PATH, f"temp_chunk_{chunk_index}_{os.urandom(4).hex()}.wav")
 
     try:
+        # Ensure correct format and export
+        chunk = chunk.set_frame_rate(16000).set_channels(1)
+        chunk.export(temp_chunk_path, format="wav")
+
         result = model.transcribe(
             temp_chunk_path, language=lang, word_timestamps=True)
 
@@ -66,7 +79,8 @@ def transcribe_audio_chunk(chunk, chunk_index, lang="en"):
         print(f"Error during chunk {chunk_index + 1} transcription: {str(e)}")
         return "", []
     finally:
-        os.unlink(temp_chunk_path)
+        if os.path.exists(temp_chunk_path):
+            os.unlink(temp_chunk_path)
 
 
 def process_audio_for_transcription(audio_content, max_workers=4, language="english"):
@@ -75,8 +89,7 @@ def process_audio_for_transcription(audio_content, max_workers=4, language="engl
         sound = AudioSegment.from_wav(io.BytesIO(audio_content))
         total_duration_ms = len(sound)
 
-        # Dynamically calculate chunk size based on audio length
-        # Aim for about 10 chunks, but no less than 30 seconds and no more than 5 minutes per chunk
+        # Dynamically calculate chunk size
         chunk_length_ms = max(min(total_duration_ms // 10, 300000), 30000)
         num_chunks = math.ceil(total_duration_ms / chunk_length_ms)
 
@@ -102,7 +115,7 @@ def process_audio_for_transcription(audio_content, max_workers=4, language="engl
 
             transcriptions = [""] * len(merged_chunks)
             all_timestamps = []
-            chunk_offsets = [0]  # To keep track of time offsets for each chunk
+            chunk_offsets = [0]
 
             for future in concurrent.futures.as_completed(future_to_chunk):
                 chunk_index = future_to_chunk[future]
@@ -110,14 +123,12 @@ def process_audio_for_transcription(audio_content, max_workers=4, language="engl
                     text, timestamps = future.result()
                     transcriptions[chunk_index] = text.strip()
 
-                    # Adjust timestamps based on chunk offset
                     adjusted_timestamps = [{"start_time": start + chunk_offsets[chunk_index],
                                             "end_time": end + chunk_offsets[chunk_index],
                                             "text": text}
                                            for start, end, text in timestamps]
                     all_timestamps.extend(adjusted_timestamps)
 
-                    # Update offset for the next chunk
                     if chunk_index < len(merged_chunks) - 1:
                         chunk_offsets.append(
                             chunk_offsets[chunk_index] + len(merged_chunks[chunk_index]) / 1000)
