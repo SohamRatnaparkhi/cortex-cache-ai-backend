@@ -25,7 +25,8 @@ from app.utils.Link import (extract_code_from_repo,
                             extract_transcript_from_youtube)
 from app.utils.Vectors import combine_data_chunks, get_vectors
 
-load_dotenv()
+if (os.path.exists('.env')):
+    load_dotenv()
 
 T = TypeVar('T', YouTubeSpecificMd, GitSpecificMd)
 

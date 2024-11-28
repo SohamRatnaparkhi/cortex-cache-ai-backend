@@ -51,25 +51,56 @@ class WebAgent:
             "Here are the most relevant web search results with full content:\n"]
 
         for i, result in enumerate(results, 1):
-            # Fetch full content
-            full_content = self.content_fetcher.fetch_web_content(
-                result.get("url", ""))
+            try:
+                # Validate required fields
+                url = result.get("url", "")
+                if not url:
+                    print(f"Warning: Missing URL for result {i}")
+                    continue
 
-            formatted_result = SearchResult(
-                title=result.get("title", ""),
-                url=result.get("url", ""),
-                source="web",
-                content=result.get("content", "") + full_content,
-                additional_info={}
-            )
-            formatted_results.append(formatted_result)
+                # Fetch full content with error handling
+                try:
+                    full_content = self.content_fetcher.fetch_web_content(url)
+                except Exception as e:
+                    print(f"Error fetching content from {url}: {str(e)}")
+                    full_content = ""
 
-            context_parts.append(f"{i}. Title: {formatted_result['title']}")
-            context_parts.append(f"   URL: {formatted_result['url']}")
-            if formatted_result['content']:
-                context_parts.append(
-                    f"   Content: {formatted_result['content']}")
-            context_parts.append("")
+                # Combine existing content with full content, handling None values
+                base_content = result.get("content", "") or ""
+                combined_content = base_content
+                if full_content:
+                    combined_content = f"{base_content}\n{full_content}" if base_content else full_content
+
+                # Create SearchResult object
+                formatted_result = SearchResult(
+                    title=combined_content.split(
+                        '\n')[0][0:30] if combined_content else base_content[0:30],
+                    url=url,
+                    source="web",
+                    content=combined_content,
+                    additional_info={}
+                )
+
+                formatted_results.append(formatted_result)
+
+                # Access attributes correctly using dot notation since SearchResult is a dataclass
+                # context_parts.append(f"{i}. Title: {formatted_result.title}")
+                context_parts.append(f"   URL: {formatted_result.url}")
+                if formatted_result.content:
+                    # Split content into chunks to avoid extremely long lines
+                    content_chunks = formatted_result.content.split('\n')
+                    for chunk in content_chunks:
+                        if chunk.strip():
+                            context_parts.append(
+                                f"   Content: {chunk.strip()}")
+                context_parts.append("")
+
+            except Exception as e:
+                print(f"Error processing result{i}: {str(e)}")
+                continue
+
+        if not formatted_results:
+            return [], "No results could be formatted successfully."
 
         return formatted_results, "\n".join(context_parts)
 
@@ -244,8 +275,6 @@ class WebAgent:
         # Convert string to AgentType if needed
         if isinstance(agent_type, str):
             agent_type = AgentType(agent_type.lower())
-
-        print("Searching for:", query, agent_type)
 
         # Get search options for this agent type
         search_opts = self._get_search_options(agent_type)

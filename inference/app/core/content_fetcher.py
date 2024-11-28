@@ -16,40 +16,72 @@ class ContentFetcher:
 
     @staticmethod
     def clean_text(text: str) -> str:
-        """Clean extracted text by removing extra whitespace and normalizing spaces."""
-        # Remove extra whitespace and normalize spaces
-        cleaned = ' '.join(text.split())
-        return cleaned.strip()
+        """Clean and normalize extracted text."""
+        if not text:
+            return ""
+
+        # Replace multiple newlines with single newline
+        text = re.sub(r'\n\s*\n', '\n', text)
+
+        # Replace multiple spaces with single space
+        text = re.sub(r'\s+', ' ', text)
+
+        # Remove leading/trailing whitespace
+        text = text.strip()
+
+        # Remove very short lines (likely navigation/UI elements)
+        lines = [line.strip() for line in text.split('\n')]
+        lines = [line for line in lines if len(line) > 30]
+
+        return '\n'.join(lines)
 
     @staticmethod
     def fetch_web_content(url: str) -> Optional[str]:
         """Fetch and extract main content from a webpage."""
         try:
-            response = requests.get(
-                url, headers=ContentFetcher.get_headers(), timeout=10)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+
+            response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
 
+            # Use lxml parser for better performance
             soup = BeautifulSoup(response.text, 'html.parser')
 
             # Remove unwanted elements
-            for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'iframe', 'noscript', 'aside']):
+            for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'iframe',
+                                          'noscript', 'aside', 'form', 'button']):
                 element.decompose()
 
             # Initialize content storage
             content_text = []
 
-            # Try different strategies to find main content
+            # Strategy 1: Look for article schema
+            article_schema = soup.find(
+                'article', itemtype="http://schema.org/Article")
+            if article_schema:
+                content_text.append(ContentFetcher.clean_text(
+                    article_schema.get_text()))
+                return content_text[0]
 
-            # 1. Look for main article content
-            main_article = soup.find(['article', 'main', '[role="main"]'])
+            # Strategy 2: Look for main article content
+            main_article = soup.find(
+                ['article', 'main', '[role="main"]', '[role="article"]'])
             if main_article:
                 content_text.append(
                     ContentFetcher.clean_text(main_article.get_text()))
                 return content_text[0]
 
-            # 2. Look for content-specific div classes
+            # Strategy 3: Look for content-specific div classes
             content_divs = soup.find_all(['div', 'section'], class_=re.compile(
-                r'content|article|post|entry|text|body', re.I))
+                r'(content|article|post|entry|text|body)(?!.*(?:sidebar|comment|footer|header|navigation))',
+                re.I))
             if content_divs:
                 # Get the div with the most text content
                 main_div = max(content_divs, key=lambda x: len(
@@ -58,23 +90,23 @@ class ContentFetcher:
                     ContentFetcher.clean_text(main_div.get_text()))
                 return content_text[0]
 
-            # 3. Collect all paragraphs if no main content container found
+            # Strategy 4: Collect all meaningful paragraphs
             paragraphs = soup.find_all('p')
             if paragraphs:
-                # Filter out very short paragraphs and navigation text
                 meaningful_paragraphs = [
                     p.get_text() for p in paragraphs
-                    # Skip very short paragraphs
                     if len(p.get_text().strip()) > 50
-                    # Skip footer-like content
-                    and not re.search(r'copyright|privacy|cookie|terms', p.get_text(), re.I)
+                    and not re.search(r'copyright|privacy|cookie|terms|subscribe|newsletter',
+                                      p.get_text(), re.I)
+                    and not any(nav in p.get_text().lower()
+                                for nav in ['menu', 'navigation', 'skip to content'])
                 ]
                 if meaningful_paragraphs:
                     content_text.append(ContentFetcher.clean_text(
                         ' '.join(meaningful_paragraphs)))
                     return content_text[0]
 
-            # 4. Last resort: get all text from body
+            # Strategy 5: Last resort - get all text from body
             if not content_text:
                 body = soup.find('body')
                 if body:

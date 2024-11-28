@@ -66,7 +66,8 @@ async def insert_many_memories_to_db(memory_data: list, isCode=False, preprocess
         print(f"Error inserting many memories: {e}")
         return -1
 
-load_dotenv()
+if os.path.exists('.env'):
+    load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 
