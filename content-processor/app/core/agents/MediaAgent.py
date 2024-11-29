@@ -44,7 +44,7 @@ class MediaAgent(ABC, Generic[T]):
         try:
             logger.debug(f"Embedding and storing chunks: {len(chunks)}")
 
-            preprocessed_chunks = update_chunks(chunks=chunks)
+            preprocessed_chunks = await update_chunks(chunks=chunks)
 
             title = self.md.title
             description = self.md.description
@@ -77,9 +77,10 @@ class VideoAgent(MediaAgent):
     async def process_media(self) -> AgentResponse:
         try:
             video_bytes = s3Opr.download_object(object_key=self.s3_media_key)
-            audio_content = extract_audio_from_video(video_bytes)
-            transcription, timestamps = process_audio_for_transcription(
+            audio_content = await extract_audio_from_video(video_bytes)
+            transcription, timestamps = await process_audio_for_transcription(
                 audio_content=audio_content, language=self.md.language)
+
             memId = str(uuid.uuid4())
             self.md.memId = memId
 
@@ -91,6 +92,10 @@ class VideoAgent(MediaAgent):
                 md_v = MediaSpecificMd(
                     chunk_id=f"{memId}_{chunk_id}",
                     type='video',
+                    end_time=timestamps[chunk_id]["end_time"] if chunk_id < len(
+                        timestamps) else 0,
+                    start_time=timestamps[chunk_id]["start_time"] if chunk_id < len(
+                        timestamps) else 0
                 )
                 md_copy.specific_desc = md_v
                 metadata.append(md_copy)
@@ -99,8 +104,8 @@ class VideoAgent(MediaAgent):
             if not chunks:
                 chunks = [transcription]
 
-            await self.store_memory_in_database(chunks, metadata, memId)
             await self.embed_and_store_chunks(chunks, metadata)
+            await self.store_memory_in_database(chunks, metadata, memId)
 
             response = AgentResponse(
                 transcript=transcription,
@@ -147,7 +152,7 @@ class AudioAgent(MediaAgent):
     async def process_media(self) -> AgentResponse:
         try:
             audio_bytes = s3Opr.download_object(object_key=self.s3_media_key)
-            transcription = process_audio_for_transcription(
+            transcription, _ = await process_audio_for_transcription(
                 audio_content=audio_bytes, language=self.md.language)
 
             memId = str(uuid.uuid4())
@@ -170,8 +175,8 @@ class AudioAgent(MediaAgent):
                 chunks = [transcription]
             chunks = [transcription]
 
-            await self.store_memory_in_database(chunks, metadata, memId)
             await self.embed_and_store_chunks(chunks, metadata)
+            await self.store_memory_in_database(chunks, metadata, memId)
 
             response = AgentResponse(
                 transcript=transcription,
@@ -236,8 +241,8 @@ class ImageAgent(MediaAgent):
             if not chunks:
                 chunks = [transcript]
 
-            await self.store_memory_in_database(chunks, metadata, memId)
             await self.embed_and_store_chunks(chunks, metadata)
+            await self.store_memory_in_database(chunks, metadata, memId)
             response = AgentResponse(
                 transcript=transcript,
                 chunks=chunks,

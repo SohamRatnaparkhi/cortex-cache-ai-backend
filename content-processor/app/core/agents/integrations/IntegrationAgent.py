@@ -47,7 +47,7 @@ class IntegrationAgent(ABC, Generic[T]):
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
             logger.debug("l1 = " + str(len(chunks)))
-            preprocessed_chunks = update_chunks(chunks=chunks)
+            preprocessed_chunks = await update_chunks(chunks=chunks)
 
             title = self.md.title
             description = self.md.description

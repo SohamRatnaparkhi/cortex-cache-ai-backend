@@ -1,4 +1,5 @@
 content-processor/env_content_processor
+content-processor/venv
 tmp
 content-processor/.env
 consumer/.env

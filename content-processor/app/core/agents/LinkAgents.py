@@ -1,29 +1,22 @@
 import logging
 import os
-import re
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generic, List, TypeVar
+from typing import Generic, List, TypeVar
 
-import requests
 from dotenv import load_dotenv
-from git import Union
 
-from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
 from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import (GitSpecificMd, Metadata, TextSpecificMd,
                                   YouTubeSpecificMd)
-from app.services.MemoryService import (insert_many_memories_to_db,
-                                        insert_memory_to_db)
+from app.services.MemoryService import insert_many_memories_to_db
 from app.services.youtube_transcription import TranscriptChunker
-from app.utils.AV import link_chunks_with_time
 from app.utils.chunk_processing import update_chunks
-from app.utils.Link import (extract_code_from_repo,
-                            extract_transcript_from_youtube)
-from app.utils.Vectors import combine_data_chunks, get_vectors
+from app.utils.Link import extract_code_from_repo
+from app.utils.Vectors import get_vectors
 
 if (os.path.exists('.env')):
     load_dotenv()
@@ -60,7 +53,7 @@ class LinkAgent(ABC, Generic[T]):
             logger.debug("l1 = " + str(len(chunks)))
             title = self.md.title
             description = self.md.description
-            preprocessed_chunks = update_chunks(chunks=chunks)
+            preprocessed_chunks = await update_chunks(chunks=chunks)
             preprocessed_chunks = [
                 title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
@@ -127,8 +120,8 @@ class GitAgent(LinkAgent[GitSpecificMd]):
 
             print("Total chunks: ", len(chunks))
 
-            await self.store_memory_in_database(chunks, meta_chunks, memId)
             await self.embed_and_store_chunks(chunks, meta_chunks)
+            await self.store_memory_in_database(chunks, meta_chunks, memId)
 
             return AgentResponse(
                 chunks=chunks,
@@ -219,7 +212,7 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             memId = str(uuid.uuid4())
             self.md.source = video_url
             self.md.memId = memId
-            self.md.title = video_title
+            self.md.title = video_title + " - " + self.md.title if self.md.title else ""
             self.md.description = video_desc
 
             # Create metadata for each chunk
