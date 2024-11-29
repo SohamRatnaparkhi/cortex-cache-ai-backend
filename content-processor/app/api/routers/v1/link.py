@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.schemas import Link
 from app.schemas.Common import AgentResponseWrapper
 from app.services import LinkService
+from app.utils.app_logger_config import logger
 
 router = APIRouter(
     prefix='/link',
@@ -37,6 +38,7 @@ async def process_youtube_link(request: Link.YoutubeLinkRequest) -> AgentRespons
         )
         # return transcription
     except Exception as e:
+        logger.error(f"Error processing youtube link: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

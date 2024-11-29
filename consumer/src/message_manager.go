@@ -131,6 +131,5 @@ func ProcessMessage(task types.Task, apiKey string) (*http.Response, types.Task,
 	}
 
 	fmt.Println("Response Status:", resp.Status)
-	fmt.Println("Response body:", resp.Body)
 	return resp, task, apiKey, nil
 }

@@ -2,10 +2,9 @@ import asyncio
 import json
 import os
 import re
-import threading
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv

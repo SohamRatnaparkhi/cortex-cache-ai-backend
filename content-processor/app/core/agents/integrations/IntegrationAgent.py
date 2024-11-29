@@ -4,7 +4,6 @@ from typing import Generic, List, TypeVar
 
 from dotenv import load_dotenv
 
-from app.core.jina_ai import use_jina
 from app.core.PineconeClient import PineconeClient
 from app.core.voyage import voyage_client
 from app.schemas.Common import AgentResponse

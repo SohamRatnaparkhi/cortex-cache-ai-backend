@@ -7,7 +7,8 @@ import numpy as np
 import openai
 from dotenv import load_dotenv
 from pydub import AudioSegment
-from whisper.tokenizer import TO_LANGUAGE_CODE
+
+from app.utils.language_codes import TO_LANGUAGE_CODE
 
 client = openai.AsyncOpenAI()
 

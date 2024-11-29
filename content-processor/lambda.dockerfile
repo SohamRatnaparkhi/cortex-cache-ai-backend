@@ -9,9 +9,9 @@ COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.1 /lambda-adapter /opt
 # Create a non-root user
 RUN useradd -m -u 1000 appuser
 
-# Install system dependencies
+# Install system dependencies including git
 RUN apt-get update -y && \
-    apt-get install -y openssl dos2unix curl && \
+    apt-get install -y openssl dos2unix curl git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -20,13 +20,14 @@ ENV HOME=/home/appuser
 ENV PYTHONUSERBASE=/home/appuser/.local
 ENV PYTHONPATH=/home/appuser/.local/lib/python3.10/site-packages:/app
 ENV PATH=/home/appuser/.local/bin:$PATH
+# Set Git executable path for GitPython
+ENV GIT_PYTHON_GIT_EXECUTABLE=/usr/bin/git
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/.prisma/binaries && \
     mkdir -p /app/.prisma/engine && \
     mkdir -p /app/.prisma/cache && \
     mkdir -p /home/appuser/.local/lib/python3.10/site-packages 
-
 
 RUN chown -R appuser:appuser /app && \
     chown -R appuser:appuser /home/appuser
@@ -59,6 +60,7 @@ RUN python -m prisma generate && \
     # Ensure the query engine is copied to our specified location
     cp -r /home/appuser/.local/lib/python3.10/site-packages/prisma/engine /app/.prisma/engine && \
     chmod +x /app/.prisma/engine
+
 # Switch back to app directory
 WORKDIR /app
 

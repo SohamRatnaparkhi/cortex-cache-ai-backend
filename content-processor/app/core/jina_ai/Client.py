@@ -4,6 +4,8 @@ import random
 import requests
 from dotenv import load_dotenv
 
+from app.utils.proxy import get_random_proxy
+
 if os.path.exists('.env'):
     load_dotenv()
 
@@ -41,6 +43,7 @@ class JinaAIClient():
             headers.pop("Content-Type")
             headers["X-Remove-Selector"] = "img, a"
             headers["X-Timeout"] = "60"
+            headers["X-Proxy-Url"] = get_random_proxy()
         return headers
 
     def get(self, endpoint=''):

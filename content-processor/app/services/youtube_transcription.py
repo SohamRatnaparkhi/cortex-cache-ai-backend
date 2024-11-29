@@ -4,6 +4,8 @@ import requests
 import tiktoken
 from youtube_transcript_api import YouTubeTranscriptApi
 
+from app.utils.proxy import get_random_proxy
+
 
 class TranscriptChunker:
     def __init__(
@@ -101,7 +103,12 @@ class TranscriptChunker:
                 channel_name = data.get("author_url", "Unknown").split('/')[-1]
 
             # Get transcript
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
+            proxyIp = get_random_proxy()
+            transcript = YouTubeTranscriptApi.get_transcript(
+                video_id, proxies={
+                    "https": proxyIp,
+                    "http": proxyIp
+                })
 
             # Create chunks
             chunks = self.create_chunks_from_transcript(transcript)

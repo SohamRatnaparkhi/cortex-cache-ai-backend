@@ -1,9 +1,7 @@
-import json
 import os
 
 import asyncpg
 from dotenv import load_dotenv
-from prisma.models import Memory
 
 from app.prisma.prisma import prisma
 
