@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -73,7 +74,18 @@ func GetApikeyFromHeaders(message *sarama.ConsumerMessage) (string, error) {
 }
 
 func MakeRequest(endpoint string, data []byte, apiKey string) (*http.Response, error) {
-	log.Printf("Making request to %s", endpoint)
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Failed to load .env file: %s", err)
+	}
+
+	fastApiServer := os.Getenv("FAST_API_SERVER")
+	if fastApiServer == "" {
+		log.Fatalf("FAST_API_SERVER is not set")
+	}
+	FAST_API_SERVER = fastApiServer
+	log.Printf("Making request to %s", FAST_API_SERVER+endpoint)
+	log.Printf("Data: %s", string(data))
 	client := &http.Client{
 		Timeout: 30 * time.Hour,
 	}
@@ -98,28 +110,27 @@ func MakeRequest(endpoint string, data []byte, apiKey string) (*http.Response, e
 	return resp, nil
 }
 
-func ProcessMessage(task types.Task, message *sarama.ConsumerMessage) (*http.Response, types.Task, string, error) {
-	// TODO: get endpoint based on type
-	apiKey, err := GetApikeyFromHeaders(message)
-	if err != nil {
-		log.Printf("Failed to get api key from headers: %s", err)
-		return nil, task, apiKey, err
-	}
+func ProcessMessage(task types.Task, apiKey string) (*http.Response, types.Task, string, error) {
 	task.Retries += 1
 	endpoint := ENDPOINT_MAP[task.Type]
 	if endpoint == "" {
 		log.Printf("No endpoint found for type: %s", task.Type)
 		return nil, task, apiKey, errors.New("no endpoint found for type: " + task.Type)
 	}
+
 	jsonData, err := json.Marshal(task.Data)
 	if err != nil {
 		log.Printf("Failed to marshal data: %s", err)
 		return nil, task, apiKey, err
 	}
+
 	resp, err := MakeRequest(endpoint, jsonData, apiKey)
 	if err != nil {
 		log.Printf("Failed to create request: %s", err)
 		return nil, task, apiKey, err
 	}
+
+	fmt.Println("Response Status:", resp.Status)
+	fmt.Println("Response body:", resp.Body)
 	return resp, task, apiKey, nil
 }
