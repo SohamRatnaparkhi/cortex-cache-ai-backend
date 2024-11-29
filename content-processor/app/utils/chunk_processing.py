@@ -1,14 +1,14 @@
+import asyncio
 import json
 import os
 import re
-import threading
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from app.utils.app_logger_config import logger
@@ -19,12 +19,12 @@ if os.path.exists('.env'):
 MAX_CHUNK_SIZE = 20
 CONTEXT_WINDOW_SIZE = 40
 
-anthropic_client = Anthropic(
+anthropic_client = AsyncAnthropic(
     api_key=os.getenv("ANTHROPIC_API_KEY"),
     max_retries=3
 )
 
-openai_client = OpenAI(
+openai_client = AsyncOpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     max_retries=3,
 )
@@ -136,7 +136,7 @@ class OutputModelStructure(BaseModel):
     sentence10: Optional[str] = ""
 
 
-def get_context_summary_from_openai(context: str, sentences: List[str]) -> OutputModelStructure:
+async def get_context_summary_from_openai(context: str, sentences: List[str]) -> OutputModelStructure:
     res = None
     try:
         sentences_xml = "\n".join([
@@ -155,7 +155,7 @@ def get_context_summary_from_openai(context: str, sentences: List[str]) -> Outpu
         prompt = BULK_CONTEXT_PROMPT.format(
             CONTEXT=context, sentences_xml=sentences_xml, IDEAL_OUTPUT=ideal_output)
 
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0.0,
             messages=[
@@ -182,7 +182,7 @@ def get_context_summary_from_openai(context: str, sentences: List[str]) -> Outpu
         return manual_parsing(len(sentences), res)
 
 
-def get_context_summary_from_anthropic(context: str, sentences: List[str]) -> OutputModelStructure:
+async def get_context_summary_from_anthropic(context: str, sentences: List[str]) -> OutputModelStructure:
     """
     Generate context-aware descriptions for a set of sentences using Anthropic's API.
 
@@ -215,7 +215,7 @@ def get_context_summary_from_anthropic(context: str, sentences: List[str]) -> Ou
         prompt = BULK_CONTEXT_PROMPT.format(
             CONTEXT=context, sentences_xml=sentences_xml, IDEAL_OUTPUT=ideal_output)
 
-        response = anthropic_client.beta.prompt_caching.messages.create(
+        response = await anthropic_client.beta.prompt_caching.messages.create(
             model="claude-3-haiku-20240307",
             temperature=0.0,
             max_tokens=1024,
@@ -260,10 +260,9 @@ def wait_for_n_seconds(n: int = 5) -> None:
     return None
 
 
-def update_chunks(chunks: List[str]) -> List[str]:
+async def update_chunks(chunks: List[str]) -> List[str]:
     try:
         updated_chunks = []
-
         PREVIOUS = 30
         NEXT = 30
         CURRENT = 10
@@ -286,45 +285,44 @@ def update_chunks(chunks: List[str]) -> List[str]:
             else:
                 openai_batches.append(batch)
 
-        def process_batches(batches, model):
+        async def process_batches(batches, model):
+            batch_results = []
             for batch in batches:
                 context_chunks = chunks[batch['start']:batch['end']]
                 context_text = ",\n".join(context_chunks)
                 sentences = chunks[batch['current_start']:batch['current_end']]
 
                 if model == 'openai':
-                    output = get_context_summary_from_openai(
-                        context_text, sentences)
+                    output = await get_context_summary_from_openai(context_text, sentences)
                 elif model == 'anthropic':
-                    output = get_context_summary_from_anthropic(
-                        context_text, sentences)
+                    output = await get_context_summary_from_anthropic(context_text, sentences)
                 else:
                     raise ValueError("Unknown model")
 
                 output = output.model_dump()
-
                 for j in range(len(sentences)):
                     desc = output[f"sentence{j+1}"]
-                    updated_chunks.append(f"{desc}. {sentences[j]}")
+                    batch_results.append(f"{desc}. {sentences[j]}")
 
-                wait_for_n_seconds(5)
+                await asyncio.sleep(5)  # Non-blocking sleep
+            return batch_results
 
-        # Create threads for anthropic and openai batches
-        thread1 = threading.Thread(
-            target=process_batches, args=(anthropic_batches, 'anthropic'))
-        thread2 = threading.Thread(
-            target=process_batches, args=(openai_batches, 'openai'))
+        # Create and gather tasks for concurrent execution
+        tasks = [
+            process_batches(anthropic_batches, 'anthropic'),
+            process_batches(openai_batches, 'openai')
+        ]
 
-        # Start the threads
-        thread1.start()
-        thread2.start()
+        # Wait for both tasks to complete and gather results
+        results = await asyncio.gather(*tasks)
 
-        # Wait for both threads to finish
-        thread1.join()
-        thread2.join()
+        # Combine results from both tasks
+        for batch_result in results:
+            updated_chunks.extend(batch_result)
 
         print("Updated chunks length - " + str(len(updated_chunks)))
         return updated_chunks
+
     except Exception as e:
         print(f"Error occurred while updating chunks: {e}")
         return []

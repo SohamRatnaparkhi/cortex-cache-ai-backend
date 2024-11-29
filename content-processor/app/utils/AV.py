@@ -1,41 +1,42 @@
-import concurrent.futures
+import asyncio
 import io
-import math
 import os
-import tempfile
-import uuid
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
-import speech_recognition as sr
-import whisper
+import openai
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
 from pydub import AudioSegment
-from pydub.silence import split_on_silence
-from whisper.tokenizer import TO_LANGUAGE_CODE
 
-r = sr.Recognizer()
+from app.utils.language_codes import TO_LANGUAGE_CODE
 
-model = whisper.load_model("tiny")
+client = openai.AsyncOpenAI()
 
 if os.path.exists('.env'):
     load_dotenv()
 
 TEMP_FOLDER_PATH = os.getenv("TEMP_FOLDER_PATH", "/tmp")
+print(TEMP_FOLDER_PATH)
+
+TEMP_FOLDER_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "tmp")
+os.makedirs(TEMP_FOLDER_PATH, exist_ok=True)
 
 
-TEMP_FOLDER_PATH = os.getenv("TEMP_FOLDER_PATH", "/tmp")
-
-
-def extract_audio_from_video(video_bytes):
+async def extract_audio_from_video(video_bytes: bytes) -> bytes:
     """Extract audio from video bytes and return audio content."""
     temp_video_path = os.path.join(
         TEMP_FOLDER_PATH, f"temp_video_{os.urandom(4).hex()}.mp4")
 
     try:
+        # Ensure temp directory exists
+        os.makedirs(os.path.dirname(temp_video_path), exist_ok=True)
+
+        # Write video bytes to temporary file
         with open(temp_video_path, "wb") as temp_video:
             temp_video.write(video_bytes)
 
+        # Extract audio
         video = AudioSegment.from_file(temp_video_path, format="mp4")
         audio_content = io.BytesIO()
         video.export(audio_content, format="wav")
@@ -46,98 +47,141 @@ def extract_audio_from_video(video_bytes):
             os.unlink(temp_video_path)
 
 
-def safe_float_conversion(value):
+def safe_float_conversion(value: Any) -> float:
     """Converts a value to a regular float if it's a numpy float."""
     if isinstance(value, np.floating):
         return float(value)
     return value
 
 
-def transcribe_audio_chunk(chunk, chunk_index, lang="en"):
-    """Transcribe a single audio chunk using Whisper."""
+async def transcribe_audio_chunk(
+    chunk: AudioSegment,
+    chunk_index: int,
+    lang: str = "en"
+) -> Tuple[str, List[Tuple[float, float, str]]]:
+    """Transcribe a single audio chunk using OpenAI's Whisper API."""
     temp_chunk_path = os.path.join(
-        TEMP_FOLDER_PATH, f"temp_chunk_{chunk_index}_{os.urandom(4).hex()}.wav")
+        TEMP_FOLDER_PATH,
+        f"temp_chunk_{chunk_index}_{os.urandom(4).hex()}.wav"
+    )
 
     try:
+        # Ensure temp directory exists
+        os.makedirs(os.path.dirname(temp_chunk_path), exist_ok=True)
+
         # Ensure correct format and export
         chunk = chunk.set_frame_rate(16000).set_channels(1)
         chunk.export(temp_chunk_path, format="wav")
 
-        result = model.transcribe(
-            temp_chunk_path, language=lang, word_timestamps=True)
+        # Open the temporary file for the API request
+        with open(temp_chunk_path, "rb") as audio_file:
+            response = await client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language=lang,
+                response_format="verbose_json",
+                timestamp_granularities=["word", "segment"]
+            )
 
+        # Process timestamps from the response
         timestamps = []
-        for segment in result['segments']:
-            start = safe_float_conversion(segment['start'])
-            end = safe_float_conversion(segment['end'])
-            text = segment['text']
+        for segment in response.segments:
+            start = float(segment.start)
+            end = float(segment.end)
+            text = segment.text
             timestamps.append((start, end, text))
 
-        text = " ".join([segment["text"] for segment in result["segments"]])
-        return text, timestamps
+        return response.text, timestamps
+
     except Exception as e:
         print(f"Error during chunk {chunk_index + 1} transcription: {str(e)}")
         return "", []
+
     finally:
         if os.path.exists(temp_chunk_path):
             os.unlink(temp_chunk_path)
 
 
-def process_audio_for_transcription(audio_content, max_workers=4, language="english"):
+async def process_audio_for_transcription(
+    audio_content: bytes,
+    max_concurrent: int = 4,
+    language: str = "english"
+) -> Tuple[str, List[Dict[str, Any]]]:
     """Process audio for transcription, dynamically splitting into chunks."""
     try:
         sound = AudioSegment.from_wav(io.BytesIO(audio_content))
         total_duration_ms = len(sound)
 
         # Dynamically calculate chunk size
-        chunk_length_ms = max(min(total_duration_ms // 10, 300000), 30000)
-        num_chunks = math.ceil(total_duration_ms / chunk_length_ms)
+        chunk_length_ms = max(min(total_duration_ms // 10, 600000), 60000)
 
         # Split into initial chunks
-        initial_chunks = [sound[i:i + chunk_length_ms]
-                          for i in range(0, total_duration_ms, chunk_length_ms)]
+        initial_chunks = [
+            sound[i:i + chunk_length_ms]
+            for i in range(0, total_duration_ms, chunk_length_ms)
+        ]
 
         # Merge small chunks with the previous one
         merged_chunks = []
         current_chunk = initial_chunks[0]
         for next_chunk in initial_chunks[1:]:
-            if len(next_chunk) < 300000:  # If the next chunk is less than 10 seconds
+            if len(next_chunk) < 60000:  # If next chunk is less than 1 minute
                 current_chunk += next_chunk
             else:
                 merged_chunks.append(current_chunk)
                 current_chunk = next_chunk
         merged_chunks.append(current_chunk)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            language_code = TO_LANGUAGE_CODE.get(language, "en")
-            future_to_chunk = {executor.submit(transcribe_audio_chunk, chunk, i, language_code): i
-                               for i, chunk in enumerate(merged_chunks)}
+        # Calculate chunk offsets
+        chunk_offsets = [0]
+        for i in range(len(merged_chunks) - 1):
+            chunk_offsets.append(
+                chunk_offsets[i] + len(merged_chunks[i]) / 1000)
 
-            transcriptions = [""] * len(merged_chunks)
-            all_timestamps = []
-            chunk_offsets = [0]
+        # Process chunks concurrently with rate limiting
+        semaphore = asyncio.Semaphore(max_concurrent)
+        language_code = TO_LANGUAGE_CODE.get(language, "en")
 
-            for future in concurrent.futures.as_completed(future_to_chunk):
-                chunk_index = future_to_chunk[future]
-                try:
-                    text, timestamps = future.result()
-                    transcriptions[chunk_index] = text.strip()
+        async def process_chunk(chunk, index):
+            async with semaphore:
+                return await transcribe_audio_chunk(chunk, index, language_code)
 
-                    adjusted_timestamps = [{"start_time": start + chunk_offsets[chunk_index],
-                                            "end_time": end + chunk_offsets[chunk_index],
-                                            "text": text}
-                                           for start, end, text in timestamps]
-                    all_timestamps.extend(adjusted_timestamps)
+        # Create tasks for all chunks
+        tasks = [
+            process_chunk(chunk, i)
+            for i, chunk in enumerate(merged_chunks)
+        ]
 
-                    if chunk_index < len(merged_chunks) - 1:
-                        chunk_offsets.append(
-                            chunk_offsets[chunk_index] + len(merged_chunks[chunk_index]) / 1000)
-                except Exception as e:
-                    print(
-                        f"Chunk {chunk_index + 1} generated an exception: {str(e)}")
+        # Execute all tasks and gather results
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results
+        transcriptions = []
+        all_timestamps = []
+
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                print(f"Chunk {i + 1} generated an exception: {str(result)}")
+                transcriptions.append("")
+                continue
+
+            text, timestamps = result
+            transcriptions.append(text.strip())
+
+            # Adjust timestamps with chunk offsets
+            adjusted_timestamps = [
+                {
+                    "start_time": start + chunk_offsets[i],
+                    "end_time": end + chunk_offsets[i],
+                    "text": text
+                }
+                for start, end, text in timestamps
+            ]
+            all_timestamps.extend(adjusted_timestamps)
 
         full_transcription = " ".join(filter(None, transcriptions))
         return full_transcription, all_timestamps
+
     except Exception as e:
         print(f"Error processing audio: {str(e)}")
         return "", []

@@ -2,8 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas.Common import AgentResponseWrapper
 from app.schemas.Media import VideoRequest
-from app.schemas.videos import ProcessVideo
-from app.services import LinkService, VideoService
+from app.services import VideoService
 
 router = APIRouter(
     prefix='/video',

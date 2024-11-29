@@ -1,7 +1,10 @@
+from typing import Optional
+
 from app.core.agents import LinkAgents
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import (GitSpecificMd, Metadata, TextSpecificMd,
                                   YouTubeSpecificMd)
+from app.utils.app_logger_config import logging
 
 
 async def get_code_from_git_repo(repo_url: str, md: Metadata[GitSpecificMd]) -> AgentResponse:
@@ -30,31 +33,35 @@ async def get_code_from_git_repo(repo_url: str, md: Metadata[GitSpecificMd]) -> 
     return await git_agent.process_media()
 
 
-async def get_youtube_video_transcript(video_url: str, md: Metadata[YouTubeSpecificMd]) -> AgentResponse:
+async def get_youtube_video_transcript(video_url: str, md: Metadata[YouTubeSpecificMd]) -> Optional[AgentResponse]:
     """
     Retrieve and process the transcript of a YouTube video.
 
-    This function creates a YoutubeAgent to fetch and process the transcript of a YouTube video.
-
     Args:
-        video_url (str): The URL of the YouTube video to process.
+        video_url (str): The URL of the YouTube video to process.  
         md (Metadata[YouTubeSpecificMd]): Metadata specific to YouTube videos.
 
     Returns:
-        AgentResponse: The processed transcript of the YouTube video, including chunks,
-                       metadata, and full transcript.
+        Optional[AgentResponse]: The processed transcript or None if processing fails.
 
     Raises:
-        ValueError: If the transcript extraction fails.
-        Exception: If there's any error during the processing of the YouTube video.
-
-    Example:
-        video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        youtube_md = Metadata[YouTubeSpecificMd](...)
-        result = get_youtube_video_transcript(video_url, youtube_md)
+        ValueError: If video_url is invalid/empty
     """
-    youtube_agent = LinkAgents.YoutubeAgent(resource_link=video_url, md=md)
-    return await youtube_agent.process_media()
+    if not video_url:
+        raise ValueError("Video URL cannot be empty")
+
+    try:
+        youtube_agent = LinkAgents.YoutubeAgent(resource_link=video_url, md=md)
+        return await youtube_agent.process_media()
+
+    except ValueError as ve:
+        logging.error(
+            f"Invalid YouTube URL or transcript unavailable: {str(ve)}")
+        return None
+
+    except Exception as e:
+        logging.error(f"Error processing YouTube video {video_url}: {str(e)}")
+        return None
 
 
 async def get_web_scraped_data(url: str, md: Metadata[TextSpecificMd]) -> AgentResponse:

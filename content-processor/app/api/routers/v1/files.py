@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.Common import AgentResponseWrapper
 from app.schemas.Media import (AudioRequest, FileRequest, ImageRequest,
                                VideoRequest)
-from app.schemas.videos import ProcessVideo
 from app.services import AudioService, FileService, ImageService, VideoService
 from app.utils.app_logger_config import logger
 
