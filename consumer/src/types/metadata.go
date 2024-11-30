@@ -36,3 +36,32 @@ type Task struct {
 	Data    interface{} `json:"data"`
 	Retries int         `json:"retries"`
 }
+
+type AgentResponse struct {
+	Transcript string      `json:"transcript"`
+	Chunks     []string    `json:"chunks"`
+	Metadata   interface{} `json:"metadata"`
+	UserID     string      `json:"userId"`
+	MemoryID   string      `json:"memoryId"`
+	Title      string      `json:"title"`
+}
+
+type AgentError struct {
+	Error string `json:"error"`
+}
+
+type AgentResponseWrapper struct {
+	Response *AgentResponse `json:"response"`
+	Error    *AgentError    `json:"error"`
+}
+
+type User struct {
+	ID              string
+	Name            string
+	Email           string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	AccountType     string
+	CurrentBalance  int
+	TotalUsedTokens int
+}

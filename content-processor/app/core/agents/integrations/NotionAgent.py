@@ -43,6 +43,8 @@ class NotionAgent(IntegrationAgent[NotionSpecificMd]):
             chunks=chunks,
             metadata=meta_chunks,
             transcript=content,
+            userId=md.user_id,
+            memoryId=memId
         )
 
     async def store_memory_in_database(self, chunks: List[str], preprocessed_chunks: List[str], meta_chunks: List[NotionSpecificMd], memId: str):

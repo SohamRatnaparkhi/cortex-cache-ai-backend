@@ -104,6 +104,7 @@ class TranscriptChunker:
 
             # Get transcript
             proxyIp = get_random_proxy()
+            print(f"Using proxy: {proxyIp}")
             transcript = YouTubeTranscriptApi.get_transcript(
                 video_id, proxies={
                     "https": proxyIp,

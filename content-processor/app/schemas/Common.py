@@ -9,9 +9,13 @@ class AgentResponse(BaseModel):
     transcript: str
     chunks: List[str]
     metadata: List[Metadata]
+    userId: str
+    memoryId: str
+
 
 class AgentError(BaseModel):
     error: str
+
 
 class AgentResponseWrapper(BaseModel):
     response: AgentResponse | None = None

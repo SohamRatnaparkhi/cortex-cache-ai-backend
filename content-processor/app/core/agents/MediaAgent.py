@@ -110,7 +110,9 @@ class VideoAgent(MediaAgent):
             response = AgentResponse(
                 transcript=transcription,
                 chunks=chunks,
-                metadata=metadata
+                metadata=metadata,
+                userId=self.md.user_id,
+                memoryId=memId
             )
             return response
         except Exception as e:
@@ -181,7 +183,9 @@ class AudioAgent(MediaAgent):
             response = AgentResponse(
                 transcript=transcription,
                 chunks=chunks,
-                metadata=metadata
+                metadata=metadata,
+                userId=self.md.user_id,
+                memoryId=memId
             )
             return response
         except Exception as e:
@@ -246,7 +250,9 @@ class ImageAgent(MediaAgent):
             response = AgentResponse(
                 transcript=transcript,
                 chunks=chunks,
-                metadata=metadata
+                metadata=metadata,
+                userId=self.md.user_id,
+                memoryId=memId
             )
             return response
         except Exception as e:
@@ -330,7 +336,9 @@ class File_PDFAgent(MediaAgent):
             response = AgentResponse(
                 transcript=full_text,
                 chunks=chunks,
-                metadata=metadata
+                metadata=metadata,
+                userId=self.md.user_id,
+                memoryId=memId
             )
             return response
         except Exception as e:

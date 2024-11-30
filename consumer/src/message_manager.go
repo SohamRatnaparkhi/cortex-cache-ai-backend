@@ -2,6 +2,7 @@ package src
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"github.com/sohamratnaparkhi/cortex-cache-ai-backend/consumer/src/types"
 )
 
@@ -105,8 +107,9 @@ func MakeRequest(endpoint string, data []byte, apiKey string) (*http.Response, e
 	if resp.StatusCode == 422 {
 		body, _ := io.ReadAll(resp.Body)
 		log.Printf("Received 422 error. Response body: %s", string(body))
-		// Handle the error appropriately
+		return nil, errors.New("422 error")
 	}
+
 	return resp, nil
 }
 
@@ -132,4 +135,99 @@ func ProcessMessage(task types.Task, apiKey string) (*http.Response, types.Task,
 
 	fmt.Println("Response Status:", resp.Status)
 	return resp, task, apiKey, nil
+}
+
+var db *sql.DB
+
+func InitDB() error {
+	// Load database configuration from environment variables
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
+	// Create connection string
+	connStr := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPassword, dbName,
+	)
+
+	// Open database connection
+	var err error
+	db, err = sql.Open("postgres", connStr)
+	if err != nil {
+		return fmt.Errorf("error connecting to database: %w", err)
+	}
+
+	// Test the connection
+	err = db.Ping()
+	if err != nil {
+		return fmt.Errorf("error pinging database: %w", err)
+	}
+
+	return nil
+}
+
+func getUserByID(userID string) (*types.User, error) {
+	query := `
+        SELECT id, name, email, created_at, updated_at, account_type, current_balance, total_used_tokens
+        FROM "User"
+        WHERE id = $1
+    `
+
+	var user types.User
+	err := db.QueryRow(query, userID).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.AccountType,
+		&user.CurrentBalance,
+		&user.TotalUsedTokens,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user not found with ID: %s", userID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error querying user: %w", err)
+	}
+
+	return &user, nil
+}
+
+func handleAPIResponse(resp *http.Response) error {
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var wrapper types.AgentResponseWrapper
+	if err := json.Unmarshal(body, &wrapper); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if wrapper.Response != nil {
+		// Get user from database using the userID from the response
+		user, err := getUserByID(wrapper.Response.UserID)
+		if err != nil {
+			return fmt.Errorf("failed to get user: %w", err)
+		}
+		return SendSuccessEmail(wrapper.Response, user)
+	} else if wrapper.Error != nil {
+		// For error case, we'll need the userID from somewhere else
+		// You might want to pass it as a parameter to handleAPIResponse
+		// For now, assuming it's available in the error response
+		user, err := getUserByID(wrapper.Response.UserID)
+		if err != nil {
+			return fmt.Errorf("failed to get user: %w", err)
+		}
+		return SendErrorEmail(wrapper.Error, user)
+	}
+
+	return fmt.Errorf("invalid response format")
 }

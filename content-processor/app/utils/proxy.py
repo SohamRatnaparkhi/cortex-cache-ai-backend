@@ -1,7 +1,10 @@
 import random
 
+username = 'spnaa652yk'
+password = '9m6lh_gSjl5qqV1ORg'
+
 proxies = [
-    '3.216.105.198'
+    f'http://{username}:{password}@gate.smartproxy.com:10001'
 ]
 
 

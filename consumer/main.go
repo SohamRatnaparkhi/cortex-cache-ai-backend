@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sohamratnaparkhi/cortex-cache-ai-backend/consumer/src"
 	"github.com/sohamratnaparkhi/cortex-cache-ai-backend/consumer/src/types"
-	"gopkg.in/gomail.v2"
 )
 
 const (
@@ -26,13 +24,6 @@ const (
 	EmailQueue        = "email:queue"
 )
 
-type EmailMessage struct {
-	To      string `json:"to"`
-	From    string `json:"from"`
-	Subject string `json:"subject"`
-	Content string `json:"content"`
-	IsHTML  bool   `json:"is_html"`
-}
 type RedisMessage struct {
 	Task   types.Task `json:"task"`
 	APIKey string     `json:"api_key"`
@@ -56,48 +47,15 @@ func initRedisClient() (*redis.Client, error) {
 	return rdb, nil
 }
 
-var emailDialer *gomail.Dialer
-
-func initEmailDialer() error {
-	smtpPort, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
-	if err != nil {
-		return err
-	}
-
-	emailDialer = gomail.NewDialer(
-		os.Getenv("SMTP_HOST"),
-		smtpPort,
-		os.Getenv("SMTP_USERNAME"),
-		os.Getenv("SMTP_PASSWORD"),
-	)
-
-	return nil
-}
-
-func sendEmail(msg EmailMessage) error {
-	m := gomail.NewMessage()
-	m.SetHeader("From", msg.From)
-	m.SetHeader("To", msg.To)
-	m.SetHeader("Subject", msg.Subject)
-
-	if msg.IsHTML {
-		m.SetBody("text/html", msg.Content)
-	} else {
-		m.SetBody("text/plain", msg.Content)
-	}
-
-	return emailDialer.DialAndSend(m)
-}
-
 func handleEmailMessage(ctx context.Context, rdb *redis.Client, message string) {
-	var emailMsg EmailMessage
+	var emailMsg types.EmailMessage
 	err := json.Unmarshal([]byte(message), &emailMsg)
 	if err != nil {
 		log.Printf("Failed to unmarshal email message: %s", err)
 		return
 	}
 
-	err = sendEmail(emailMsg)
+	err = src.SendEmail(emailMsg)
 	if err != nil {
 		log.Printf("Failed to send email: %s", err)
 		// Push to failed queue with retry logic
@@ -108,7 +66,7 @@ func handleEmailMessage(ctx context.Context, rdb *redis.Client, message string) 
 	log.Printf("Successfully sent email to %s", emailMsg.To)
 }
 
-func retryEmailSend(ctx context.Context, rdb *redis.Client, msg EmailMessage, retryCount int) {
+func retryEmailSend(ctx context.Context, rdb *redis.Client, msg types.EmailMessage, retryCount int) {
 	if retryCount >= 3 {
 		// After 3 retries, move to failed queue
 		jsonData, _ := json.Marshal(msg)
@@ -123,7 +81,7 @@ func retryEmailSend(ctx context.Context, rdb *redis.Client, msg EmailMessage, re
 	backOffTime := math.Pow(2, float64(retryCount)) * 1000
 	time.Sleep(time.Duration(backOffTime) * time.Millisecond)
 
-	err := sendEmail(msg)
+	err := src.SendEmail(msg)
 	if err != nil {
 		log.Printf("Retry %d failed: %s", retryCount+1, err)
 		retryEmailSend(ctx, rdb, msg, retryCount+1)
@@ -222,7 +180,7 @@ func main() {
 		log.Printf("Failed to load .env file: %s", err)
 	}
 
-	err = initEmailDialer()
+	err = src.InitEmailDialer()
 	if err != nil {
 		log.Fatalf("Failed to initialize email dialer: %s", err)
 	}

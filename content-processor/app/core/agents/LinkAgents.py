@@ -129,6 +129,8 @@ class GitAgent(LinkAgent[GitSpecificMd]):
                 chunks=chunks,
                 metadata=meta_chunks,
                 transcript=content,
+                userId=self.md.user_id,
+                memoryId=memId,
             )
         except ValueError as ve:
             raise ve
@@ -270,6 +272,8 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 transcript=full_transcript,
                 chunks=formatted_chunks,
                 metadata=meta_chunks,
+                userId=self.md.user_id,
+                memoryId=memId,
             )
 
         except Exception as e:
@@ -348,6 +352,8 @@ class WebAgent(LinkAgent[TextSpecificMd]):
                 chunks=chunks,
                 metadata=meta_chunks,
                 transcript=content,
+                userId=self.md.user_id,
+                memoryId=memId,
             )
 
     async def store_memory_in_database(self, chunks: List[str], meta_chunks: List[TextSpecificMd], memId: str):
