@@ -48,7 +48,7 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ECR_REPO_A }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f service-a/Dockerfile service-a
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f content-processor/lambda.dockerfile content-processor
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           # Get the image digest
           DIGEST=$(aws ecr describe-images --repository-name $ECR_REPOSITORY --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageDigest' --output text)
@@ -65,7 +65,7 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ECR_REPO_B }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f service-b/Dockerfile service-b
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f inference/lambda2.Dockerfile inference
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           # Get the image digest
           DIGEST=$(aws ecr describe-images --repository-name $ECR_REPOSITORY --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageDigest' --output text)
