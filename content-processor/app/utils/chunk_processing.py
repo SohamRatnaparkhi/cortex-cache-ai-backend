@@ -12,6 +12,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from app.utils.app_logger_config import logger
+from app.utils.status_tracking import TRACKER, ProcessingStatus
 
 if os.path.exists('.env'):
     load_dotenv()
@@ -238,6 +239,7 @@ async def get_context_summary_from_anthropic(context: str, sentences: List[str])
             ],
             extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
         )
+        # if response.
         logger.debug(response.usage)
         res = response.content[0].text.strip()
         # remove all \n
@@ -260,7 +262,7 @@ def wait_for_n_seconds(n: int = 5) -> None:
     return None
 
 
-async def update_chunks(chunks: List[str]) -> List[str]:
+async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
     try:
         updated_chunks = []
         PREVIOUS = 30
@@ -270,6 +272,16 @@ async def update_chunks(chunks: List[str]) -> List[str]:
         # Split the chunks into batches for anthropic and openai
         anthropic_batches = []
         openai_batches = []
+
+        TRACKER.update_status(
+            userId, memoryId, ProcessingStatus.CONTEXTUALIZING, 20)
+
+        total_chunks = len(chunks)
+        max_percentage = 80
+
+        step_size_for_percentage_update = 10
+        percentage_update_per_step = max_percentage // min(
+            (total_chunks // step_size_for_percentage_update), 1)
 
         for i in range(0, len(chunks), CURRENT):
             start = max(0, i - PREVIOUS)
@@ -286,6 +298,7 @@ async def update_chunks(chunks: List[str]) -> List[str]:
                 openai_batches.append(batch)
 
         async def process_batches(batches, model):
+            percentage = 20
             batch_results = []
             for batch in batches:
                 context_chunks = chunks[batch['start']:batch['end']]
@@ -304,6 +317,10 @@ async def update_chunks(chunks: List[str]) -> List[str]:
                     desc = output[f"sentence{j+1}"]
                     batch_results.append(f"{desc}. {sentences[j]}")
 
+                percentage = min(
+                    percentage + percentage_update_per_step, max_percentage)
+                TRACKER.update_status(
+                    userId, memoryId, ProcessingStatus.CONTEXTUALIZING, percentage)
                 await asyncio.sleep(5)  # Non-blocking sleep
             return batch_results
 

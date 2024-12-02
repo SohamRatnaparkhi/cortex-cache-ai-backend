@@ -12,6 +12,7 @@ class ProcessingStatus(Enum):
     QUEUED = "QUEUED"
     PROCESSING = "PROCESSING"
     STORING_DOCUMENT = "STORING_DOCUMENT"
+    CONTEXTUALIZING = "CONTEXTUALIZING"
     CREATING_EMBEDDINGS = "CREATING_EMBEDDINGS"
     STORING_VECTORS = "STORING_VECTORS"
     COMPLETED = "COMPLETED"
@@ -77,7 +78,10 @@ class StatusTracker:
         if error is not None:
             current_data["error"] = error
 
-        self.redis_client.set(key, json.dumps(current_data))
+        ttl = 60 * 60 * 24  # 24 hours
+        if current_data.get("status") == ProcessingStatus.COMPLETED.value:
+            ttl = 10 * 60
+        self.redis_client.set(key, json.dumps(current_data), ex=ttl)
 
     def get_status(self, user_id: str, document_id: str) -> Dict:
         """Get current status of a document"""
