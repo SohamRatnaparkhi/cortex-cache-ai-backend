@@ -280,8 +280,9 @@ async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
         max_percentage = 80
 
         step_size_for_percentage_update = 10
-        percentage_update_per_step = max_percentage // max(
+        chunks_per_step = max(
             (total_chunks // step_size_for_percentage_update), 1)
+        percentage_update_per_step = max_percentage // chunks_per_step if chunks_per_step > 0 else max_percentage
 
         for i in range(0, len(chunks), CURRENT):
             start = max(0, i - PREVIOUS)

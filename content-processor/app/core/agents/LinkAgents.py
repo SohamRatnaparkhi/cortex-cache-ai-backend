@@ -221,7 +221,6 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             TRACKER.update_status(
                 self.md.user_id, memId, ProcessingStatus.PROCESSING, 20
             )
-            print("Processing video...")
             chunks, video_title, video_desc, author, channel_name = await self.chunker.process_video(
                 video_url, api_url
             )
