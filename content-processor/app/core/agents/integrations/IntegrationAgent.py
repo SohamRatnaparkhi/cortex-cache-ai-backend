@@ -10,6 +10,7 @@ from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GitSpecificMd, Metadata, NotionSpecificMd
 from app.utils.app_logger_config import logger
 from app.utils.chunk_processing import update_chunks
+from app.utils.status_tracking import TRACKER, ProcessingStatus
 from app.utils.Vectors import get_vectors
 
 if (os.path.exists('.env')):
@@ -46,7 +47,9 @@ class IntegrationAgent(ABC, Generic[T]):
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
             logger.debug("l1 = " + str(len(chunks)))
-            preprocessed_chunks = await update_chunks(chunks=chunks)
+            TRACKER.update_status(
+                self.md.user_id, self.md.memId, ProcessingStatus.CREATING_EMBEDDINGS, progress=25)
+            preprocessed_chunks = await update_chunks(chunks=chunks, memoryId=self.md.memId, userId=self.md.user_id)
 
             title = self.md.title
             description = self.md.description

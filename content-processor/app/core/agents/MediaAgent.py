@@ -19,6 +19,7 @@ from app.utils.AV import (extract_audio_from_video,
 from app.utils.chunk_processing import update_chunks
 # from app.utils.chunk_preprocessing import update_chunks
 from app.utils.s3 import S3Operations
+from app.utils.status_tracking import TRACKER, ProcessingStatus
 from app.utils.Vectors import combine_data_chunks, get_vectors
 
 s3Opr = S3Operations()
@@ -44,7 +45,7 @@ class MediaAgent(ABC, Generic[T]):
         try:
             logger.debug(f"Embedding and storing chunks: {len(chunks)}")
 
-            preprocessed_chunks = await update_chunks(chunks=chunks)
+            preprocessed_chunks = await update_chunks(chunks=chunks, userId=self.md.user_id, memoryId=self.md.memId)
 
             title = self.md.title
             description = self.md.description
@@ -52,10 +53,6 @@ class MediaAgent(ABC, Generic[T]):
             preprocessed_chunks = [
                 title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
-            # embeddings = use_jina.get_embedding(preprocessed_chunks)
-
-            # embeddings = [e["embedding"]
-            #               for e in embeddings if "embedding" in e.keys()]
             embeddings = voyage_client.get_embeddings(preprocessed_chunks)
             logger.debug(f"Length after embedding: {len(embeddings)}")
 
@@ -66,6 +63,8 @@ class MediaAgent(ABC, Generic[T]):
             batch_size = 100
             pinecone_client = PineconeClient()
             # pinecone_client.upsert_batch(vectors, batch_size)
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=self.md.memId, status=ProcessingStatus.STORING_VECTORS, progress=85)
             res = pinecone_client.upsert(vectors, batch_size)
             logger.debug(f"Upsert response: {res}")
             return preprocessed_chunks
@@ -76,13 +75,24 @@ class MediaAgent(ABC, Generic[T]):
 class VideoAgent(MediaAgent):
     async def process_media(self) -> AgentResponse:
         try:
-            video_bytes = s3Opr.download_object(object_key=self.s3_media_key)
-            audio_content = await extract_audio_from_video(video_bytes)
-            transcription, timestamps = await process_audio_for_transcription(
-                audio_content=audio_content, language=self.md.language)
-
             memId = str(uuid.uuid4())
             self.md.memId = memId
+
+            TRACKER.create_status(
+                user_id=self.md.user_id, document_id=memId, document_title=self.md.title
+            )
+
+            video_bytes = s3Opr.download_object(object_key=self.s3_media_key)
+            audio_content = await extract_audio_from_video(video_bytes)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=15
+            )
+            transcription, timestamps = await process_audio_for_transcription(
+                audio_content=audio_content, language=self.md.language)
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=20
+            )
 
             chunks = use_jina.segment_data(transcription)
             metadata = []
@@ -104,9 +114,17 @@ class VideoAgent(MediaAgent):
             if not chunks:
                 chunks = [transcription]
 
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.CREATING_EMBEDDINGS, progress=20
+            )
             await self.embed_and_store_chunks(chunks, metadata)
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.STORING_DOCUMENT, progress=90
+            )
             await self.store_memory_in_database(chunks, metadata, memId)
-
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.COMPLETED, progress=100
+            )
             response = AgentResponse(
                 transcript=transcription,
                 chunks=chunks,
@@ -153,12 +171,25 @@ class VideoAgent(MediaAgent):
 class AudioAgent(MediaAgent):
     async def process_media(self) -> AgentResponse:
         try:
+            memId = str(uuid.uuid4())
+            self.md.memId = memId
+
+            TRACKER.create_status(
+                user_id=self.md.user_id, document_id=memId, document_title=self.md.title
+            )
+
             audio_bytes = s3Opr.download_object(object_key=self.s3_media_key)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=15
+            )
+
             transcription, _ = await process_audio_for_transcription(
                 audio_content=audio_bytes, language=self.md.language)
 
-            memId = str(uuid.uuid4())
-            self.md.memId = memId
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=20
+            )
 
             chunks = use_jina.segment_data(transcription)
             metadata = []
@@ -177,8 +208,20 @@ class AudioAgent(MediaAgent):
                 chunks = [transcription]
             chunks = [transcription]
 
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.CREATING_EMBEDDINGS, progress=20
+            )
             await self.embed_and_store_chunks(chunks, metadata)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.STORING_DOCUMENT, progress=90
+            )
+
             await self.store_memory_in_database(chunks, metadata, memId)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.COMPLETED, progress=100
+            )
 
             response = AgentResponse(
                 transcript=transcription,
@@ -221,11 +264,24 @@ class AudioAgent(MediaAgent):
 class ImageAgent(MediaAgent):
     async def process_media(self) -> AgentResponse:
         try:
-            image_bytes = s3Opr.download_object(object_key=self.s3_media_key)
-            image = Image.open(io.BytesIO(image_bytes))
-            transcript = pytesseract.image_to_string(image)
             memId = str(uuid.uuid4())
             self.md.memId = memId
+
+            TRACKER.create_status(
+                user_id=self.md.user_id, document_id=memId, document_title=self.md.title
+            )
+
+            image_bytes = s3Opr.download_object(object_key=self.s3_media_key)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=15
+            )
+            image = Image.open(io.BytesIO(image_bytes))
+            transcript = pytesseract.image_to_string(image)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=20
+            )
 
             chunks = use_jina.segment_data(transcript)
             metadata = []
@@ -244,8 +300,13 @@ class ImageAgent(MediaAgent):
                 chunk_id += 1
             if not chunks:
                 chunks = [transcript]
-
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.CREATING_EMBEDDINGS, progress=20
+            )
             await self.embed_and_store_chunks(chunks, metadata)
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.STORING_DOCUMENT, progress=90
+            )
             await self.store_memory_in_database(chunks, metadata, memId)
             response = AgentResponse(
                 transcript=transcript,
@@ -290,7 +351,18 @@ class ImageAgent(MediaAgent):
 class File_PDFAgent(MediaAgent):
     async def process_media(self) -> AgentResponse:
         try:
+            memId = str(uuid.uuid4())
+            self.md.memId = memId
+            TRACKER.create_status(
+                user_id=self.md.user_id, document_id=memId, document_title=self.md.title
+            )
+
             pdf_bytes = s3Opr.download_object(object_key=self.s3_media_key)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=5
+            )
+
             pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
 
             combine_pages = min(5, len(pdf_reader.pages))
@@ -317,9 +389,6 @@ class File_PDFAgent(MediaAgent):
             full_text = '\n\n'.join(f"{page_content}\n\n{'*' * 50}Page {i} ends{'*' * 50}"
                                     for i, page_content in enumerate(text, 1))
 
-            memId = str(uuid.uuid4())
-            self.md.memId = memId
-
             metadata = []
             for chunk_id, _ in enumerate(chunks):
                 md_copy = self.md.model_copy()
@@ -330,8 +399,17 @@ class File_PDFAgent(MediaAgent):
                 md_copy.specific_desc = md_v
                 metadata.append(md_copy)
 
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.CREATING_EMBEDDINGS, progress=15)
+
             preprocessed_chunks = await self.embed_and_store_chunks(chunks, metadata)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.STORING_DOCUMENT, progress=90)
             await self.store_memory_in_database(chunks, preprocessed_chunks, metadata, memId)
+
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.COMPLETED, progress=100)
 
             response = AgentResponse(
                 transcript=full_text,

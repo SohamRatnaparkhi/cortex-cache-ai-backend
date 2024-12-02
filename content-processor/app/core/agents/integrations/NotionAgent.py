@@ -8,6 +8,7 @@ from app.schemas.Metadata import NotionSpecificMd
 from app.services.MemoryService import insert_many_memories_to_db
 from app.services.NotionPageExtractor import NotionTextExtractor
 from app.utils.app_logger_config import logger
+from app.utils.status_tracking import TRACKER, ProcessingStatus
 
 
 class NotionAgent(IntegrationAgent[NotionSpecificMd]):
@@ -15,15 +16,20 @@ class NotionAgent(IntegrationAgent[NotionSpecificMd]):
         page_id = self.resource_link
         access_token = self.access_token
         md = self.md
+        memId = str(uuid.uuid4())
+
+        TRACKER.create_status(md.user_id, memId, "Notion page")
 
         # Process the Notion page and get text from it
         content = NotionTextExtractor(page_id, access_token).get_page_content()
+
+        TRACKER.update_status(
+            md.user_id, memId, ProcessingStatus.CREATING_EMBEDDINGS, progress=25)
 
         logger.debug(f"Content: {content}")
 
         chunks = use_jina.segment_data(content)
 
-        memId = str(uuid.uuid4())
         self.md.memId = memId
 
         meta_chunks = []
@@ -37,7 +43,13 @@ class NotionAgent(IntegrationAgent[NotionSpecificMd]):
             meta_chunks.append(md_copy)
 
         preprocessed_chunks = await self.embed_and_store_chunks(chunks, meta_chunks)
+
+        TRACKER.update_status(
+            md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, progress=85)
         await self.store_memory_in_database(chunks=chunks, preprocessed_chunks=preprocessed_chunks, meta_chunks=meta_chunks, memId=memId)
+
+        TRACKER.update_status(
+            md.user_id, memId, ProcessingStatus.COMPLETED, progress=100)
 
         return AgentResponse(
             chunks=chunks,

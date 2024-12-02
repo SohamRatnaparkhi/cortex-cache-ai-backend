@@ -60,7 +60,8 @@ async def get_youtube_video_transcript(video_url: str, md: Metadata[YouTubeSpeci
         return None
 
     except Exception as e:
-        logging.error(f"Error processing YouTube video {video_url}: {str(e)}")
+        logging.error(
+            f"Error processing YouTube video in service {video_url}: {str(e)}")
         return None
 
 
