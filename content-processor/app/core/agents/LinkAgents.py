@@ -18,6 +18,7 @@ from app.services.MemoryService import insert_many_memories_to_db
 from app.services.youtube_transcription import TranscriptChunker
 from app.utils.chunk_processing import update_chunks
 from app.utils.Link import extract_code_from_repo
+from app.utils.status_tracking import TRACKER, ProcessingStatus
 from app.utils.Vectors import get_vectors
 
 if (os.path.exists('.env')):
@@ -55,7 +56,7 @@ class LinkAgent(ABC, Generic[T]):
             logger.debug("l1 = " + str(len(chunks)))
             title = self.md.title
             description = self.md.description
-            preprocessed_chunks = await update_chunks(chunks=chunks)
+            preprocessed_chunks = await update_chunks(chunks=chunks, memoryId=self.md.memId, userId=self.md.user_id)
             preprocessed_chunks = [
                 title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
@@ -63,6 +64,8 @@ class LinkAgent(ABC, Generic[T]):
 
             # embeddings = [e["embedding"]
             #               for e in embeddings if "embedding" in e.keys()]
+            TRACKER.update_status(
+                self.md.user_id, self.md.memId, ProcessingStatus.CREATING_EMBEDDINGS, 25)
             embeddings = voyage_client.get_embeddings(preprocessed_chunks)
             logger.debug("l2 = " + str(len(embeddings)))
 
@@ -106,15 +109,17 @@ class GitAgent(LinkAgent[GitSpecificMd]):
             RuntimeError: If there's an error processing the Git repository.
         """
         try:
+            memId = str(uuid.uuid4())
+            self.md.memId = memId
             repo_url = self.resource_link
+
+            TRACKER.create_status(
+                self.md.user_id, memId, self.md.title)
             code = extract_code_from_repo(repo_url=repo_url, metadata=self.md)
 
             chunks = code.chunks
             meta_chunks = code.metadata
             content = code.transcript
-
-            memId = str(uuid.uuid4())
-            self.md.memId = memId
 
             # Add memory id to chunks' metadata
             for meta in meta_chunks:
@@ -123,7 +128,12 @@ class GitAgent(LinkAgent[GitSpecificMd]):
             print("Total chunks: ", len(chunks))
 
             await self.embed_and_store_chunks(chunks, meta_chunks)
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, 85)
             await self.store_memory_in_database(chunks, meta_chunks, memId)
+
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.COMPLETED, 100)
 
             return AgentResponse(
                 chunks=chunks,
@@ -198,13 +208,20 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 min_tokens=100,
                 overlap_tokens=100
             )
+            memId = str(uuid.uuid4())
+            TRACKER.create_status(
+                self.md.user_id, memId, self.md.title)
             start_time = time.time()
             api_url = os.getenv("YOUTUBE_NO_EMBED_API_URL")
             video_url = self.resource_link
             video_id = self.chunker.extract_video_id(video_url)
-
+            print(f"Video ID: {video_id}")
             # Process video and get chunks with metadata
             extract_start = time.time()
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.PROCESSING, 20
+            )
+            print("Processing video...")
             chunks, video_title, video_desc, author, channel_name = await self.chunker.process_video(
                 video_url, api_url
             )
@@ -213,7 +230,6 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 f"Transcript extraction took {extract_end - extract_start:.2f} seconds")
 
             # Update metadata
-            memId = str(uuid.uuid4())
             self.md.source = video_url
             self.md.memId = memId
             self.md.title = video_title + " - " + self.md.title if self.md.title else ""
@@ -247,19 +263,26 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             logger.info(
                 f"Metadata creation took {metadata_end - metadata_start:.2f} seconds")
 
+            embed_start = time.time()
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.CREATING_EMBEDDINGS, 25
+            )
+            await self.embed_and_store_chunks(formatted_chunks, meta_chunks)
+            embed_end = time.time()
+            logger.info(
+                f"Embedding and storing took {embed_end - embed_start:.2f} seconds")
+
             # Store in database
             store_start = time.time()
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, 85
+            )
             await self.store_memory_in_database(formatted_chunks, meta_chunks, memId)
             store_end = time.time()
             logger.info(
                 f"Storing memory took {store_end - store_start:.2f} seconds")
 
             # Embed and store chunks
-            embed_start = time.time()
-            await self.embed_and_store_chunks(formatted_chunks, meta_chunks)
-            embed_end = time.time()
-            logger.info(
-                f"Embedding and storing took {embed_end - embed_start:.2f} seconds")
 
             end_time = time.time()
             logger.info(
@@ -267,7 +290,9 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
 
             # Combine all text for full transcript
             full_transcript = " ".join(formatted_chunks)
-
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.COMPLETED, 100
+            )
             return AgentResponse(
                 transcript=full_transcript,
                 chunks=formatted_chunks,
@@ -316,7 +341,9 @@ class WebAgent(LinkAgent[TextSpecificMd]):
         Process a web page, extract its text, and segment it into chunks.
         """
         link = self.resource_link
-
+        memId = str(uuid.uuid4())
+        TRACKER.create_status(
+            self.md.user_id, memId, self.md.title)
         response = use_jina.web_scraper(link)
         print(f"Web Scraper Response: {response}")
         if response is not None:
@@ -330,11 +357,11 @@ class WebAgent(LinkAgent[TextSpecificMd]):
             # if chunks is not None and "chunks" in chunks.keys():
             #     chunks = chunks["chunks"]
 
-            memId = str(uuid.uuid4())
             self.md.memId = memId
             self.md.title += " " + title
             self.md.description += " " + description
-
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.PROCESSING, 20)
             meta_chunks = []
             for i in range(len(chunks)):
                 tmd = TextSpecificMd(
@@ -346,8 +373,11 @@ class WebAgent(LinkAgent[TextSpecificMd]):
                 meta_chunks.append(md_copy)
 
             await self.embed_and_store_chunks(chunks, meta_chunks)
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, 85)
             await self.store_memory_in_database(chunks, meta_chunks, memId)
-
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.COMPLETED, 100)
             return AgentResponse(
                 chunks=chunks,
                 metadata=meta_chunks,

@@ -87,14 +87,14 @@ class TranscriptChunker:
         """
         try:
             video_id = self.extract_video_id(video_url)
-
+            print("Extracted video ID:", video_id)
             # Get video metadata
             response = requests.get(f"{api_url}{video_url}")
             video_title = "Untitled"
             video_desc = ""
             author = "Unknown"
             channel_name = "Unknown"
-
+            print(response)
             if response.status_code == 200:
                 data = response.json()
                 video_title = data.get("title", "Untitled")
@@ -114,7 +114,10 @@ class TranscriptChunker:
             # Create chunks
             chunks = self.create_chunks_from_transcript(transcript)
 
+            print(f"Extracted {len(chunks)} chunks from video transcript")
+
             return chunks, video_title, video_desc, author, channel_name
 
         except Exception as e:
-            raise Exception(f"Error processing YouTube video: {str(e)}")
+            raise Exception(
+                f"Error processing YouTube video in chunker: {str(e)}")
