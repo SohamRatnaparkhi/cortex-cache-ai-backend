@@ -1,6 +1,5 @@
 #!/bin/bash
 set -e
-
 # Ensure Prisma directories exist and have correct permissions
 mkdir -p /app/.prisma/binaries
 mkdir -p /app/.prisma/cache
