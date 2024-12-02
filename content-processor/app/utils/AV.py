@@ -16,10 +16,8 @@ if os.path.exists('.env'):
     load_dotenv()
 
 TEMP_FOLDER_PATH = os.getenv("TEMP_FOLDER_PATH", "/tmp")
-print(TEMP_FOLDER_PATH)
+print(f"temporary folder path = {TEMP_FOLDER_PATH}")
 
-TEMP_FOLDER_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "tmp")
 os.makedirs(TEMP_FOLDER_PATH, exist_ok=True)
 
 
