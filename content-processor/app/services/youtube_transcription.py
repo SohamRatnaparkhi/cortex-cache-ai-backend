@@ -87,7 +87,6 @@ class TranscriptChunker:
         """
         try:
             video_id = self.extract_video_id(video_url)
-            print("Extracted video ID:", video_id)
             # Get video metadata
             response = requests.get(f"{api_url}{video_url}")
             video_title = "Untitled"
@@ -113,8 +112,6 @@ class TranscriptChunker:
 
             # Create chunks
             chunks = self.create_chunks_from_transcript(transcript)
-
-            print(f"Extracted {len(chunks)} chunks from video transcript")
 
             return chunks, video_title, video_desc, author, channel_name
 
