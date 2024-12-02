@@ -5,7 +5,6 @@ set -e
 mkdir -p /app/.prisma/binaries
 mkdir -p /app/.prisma/cache
 
-
 if [ -z "${AWS_LAMBDA_RUNTIME_API}" ]; then
     # If not in Lambda environment, run local server
     exec uvicorn app.main:app --host 0.0.0.0 --port 8080
