@@ -113,8 +113,9 @@ func MakeRequest(endpoint string, data []byte, apiKey string) (*http.Response, e
 	return resp, nil
 }
 
-func ProcessMessage(task types.Task, apiKey string) (*http.Response, types.Task, string, error) {
+func ProcessMessage(task types.Task, apiKey string, db *sql.DB) (*http.Response, types.Task, string, error) {
 	task.Retries += 1
+
 	endpoint := ENDPOINT_MAP[task.Type]
 	if endpoint == "" {
 		log.Printf("No endpoint found for type: %s", task.Type)
@@ -134,71 +135,101 @@ func ProcessMessage(task types.Task, apiKey string) (*http.Response, types.Task,
 	}
 
 	fmt.Println("Response Status:", resp.Status)
+	fmt.Printf("DB: %v\n", db)
+
+	// Handle the error from handleAPIResponse
+	if err := handleAPIResponse(resp, db); err != nil {
+		log.Printf("Error handling API response: %v", err)
+		return resp, task, apiKey, err
+	}
+
 	return resp, task, apiKey, nil
 }
 
-var db *sql.DB
+func InitDB() (*sql.DB, error) {
 
-func InitDB() error {
-	// Load database configuration from environment variables
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
+	database_url := os.Getenv(("DATABASE_URL"))
 
-	// Create connection string
-	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		dbHost, dbPort, dbUser, dbPassword, dbName,
-	)
+	if database_url == "" {
+		return nil, fmt.Errorf("DATABASE_URL is not set")
+	}
+
+	var db *sql.DB
 
 	// Open database connection
 	var err error
-	db, err = sql.Open("postgres", connStr)
+	db, err = sql.Open("postgres", database_url)
 	if err != nil {
-		return fmt.Errorf("error connecting to database: %w", err)
+		return nil, fmt.Errorf("error connecting to database: %w", err)
 	}
 
 	// Test the connection
 	err = db.Ping()
 	if err != nil {
-		return fmt.Errorf("error pinging database: %w", err)
+		return nil, fmt.Errorf("error pinging database: %w", err)
 	}
 
-	return nil
+	fmt.Printf("Connected to database\n")
+
+	if db == nil {
+		return nil, fmt.Errorf("db is nil")
+	}
+
+	return db, nil
 }
 
-func getUserByID(userID string) (*types.User, error) {
-	query := `
-        SELECT id, name, email, created_at, updated_at, account_type, current_balance, total_used_tokens
-        FROM "User"
-        WHERE id = $1
-    `
+func getUserByID(userID string, db *sql.DB) (*types.User, error) {
+	// Input validation
+	if userID == "" {
+		return nil, fmt.Errorf("userID cannot be empty")
+	} else {
+		log.Printf("Getting user with ID: %s", userID)
+	}
 
-	var user types.User
-	err := db.QueryRow(query, userID).Scan(
+	// Early db connection check
+	if db == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	} else {
+		log.Printf("Database connection initialized")
+	}
+
+	query := `
+		SELECT id, name, email
+		FROM "User"
+		WHERE id = $1`
+
+	// Prepare the statement to verify query syntax
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare query: %w", err)
+	}
+	defer stmt.Close()
+
+	// Initialize user struct
+	user := &types.User{}
+
+	// Execute query and scan results
+	err = stmt.QueryRow(userID).Scan(
 		&user.ID,
 		&user.Name,
 		&user.Email,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-		&user.AccountType,
-		&user.CurrentBalance,
-		&user.TotalUsedTokens,
 	)
 
-	if err == sql.ErrNoRows {
+	// Handle specific error cases
+	switch {
+	case err == sql.ErrNoRows:
 		return nil, fmt.Errorf("user not found with ID: %s", userID)
-	}
-	if err != nil {
+	case err != nil:
 		return nil, fmt.Errorf("error querying user: %w", err)
 	}
 
-	return &user, nil
+	// Log successful query (optional, for debugging)
+	log.Printf("Successfully retrieved user with ID: %s", userID)
+
+	return user, nil
 }
 
-func handleAPIResponse(resp *http.Response) error {
+func handleAPIResponse(resp *http.Response, db *sql.DB) error {
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
@@ -213,20 +244,32 @@ func handleAPIResponse(resp *http.Response) error {
 
 	if wrapper.Response != nil {
 		// Get user from database using the userID from the response
-		user, err := getUserByID(wrapper.Response.UserID)
+		user, err := getUserByID(wrapper.Response.UserID, db)
 		if err != nil {
 			return fmt.Errorf("failed to get user: %w", err)
 		}
-		return SendSuccessEmail(wrapper.Response, user)
+
+		if user != nil {
+			fmt.Println("User Email:", user.Email)
+			return SendSuccessEmail(wrapper.Response, user)
+		}
+		return fmt.Errorf("user not found")
+
 	} else if wrapper.Error != nil {
-		// For error case, we'll need the userID from somewhere else
-		// You might want to pass it as a parameter to handleAPIResponse
-		// For now, assuming it's available in the error response
-		user, err := getUserByID(wrapper.Response.UserID)
+		// For error case, we need to get the userID from the error wrapper
+		if wrapper.Response.UserID == "" {
+			return fmt.Errorf("no userID provided in error response")
+		}
+
+		user, err := getUserByID(wrapper.Response.UserID, db)
 		if err != nil {
 			return fmt.Errorf("failed to get user: %w", err)
 		}
-		return SendErrorEmail(wrapper.Error, user)
+
+		if user != nil {
+			return SendErrorEmail(wrapper.Error, user)
+		}
+		return fmt.Errorf("user not found")
 	}
 
 	return fmt.Errorf("invalid response format")

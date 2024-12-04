@@ -56,12 +56,7 @@ type AgentResponseWrapper struct {
 }
 
 type User struct {
-	ID              string
-	Name            string
-	Email           string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	AccountType     string
-	CurrentBalance  int
-	TotalUsedTokens int
+	ID    string
+	Name  string
+	Email string
 }

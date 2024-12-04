@@ -345,6 +345,10 @@ class WebAgent(LinkAgent[TextSpecificMd]):
             self.md.user_id, memId, self.md.title)
         response = use_jina.web_scraper(link)
         print(f"Web Scraper Response: {response}")
+        retry = 4
+        while response is None or response.get("data") is None and retry > 0:
+            response = use_jina.web_scraper(link)
+            retry -= 1
         if response is not None:
             content = response.get("data").get("content")
             title = response.get("data").get("title")

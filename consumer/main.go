@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"math"
@@ -91,7 +92,7 @@ func retryEmailSend(ctx context.Context, rdb *redis.Client, msg types.EmailMessa
 	log.Printf("Successfully sent email to %s after %d retries", msg.To, retryCount+1)
 }
 
-func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message string) {
+func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message string, db *sql.DB) {
 	var redisMsg RedisMessage
 	err := json.Unmarshal([]byte(message), &redisMsg)
 	if err != nil {
@@ -99,7 +100,7 @@ func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message
 		return
 	}
 
-	resp, newTask, _, err := src.ProcessMessage(redisMsg.Task, redisMsg.APIKey)
+	resp, newTask, _, err := src.ProcessMessage(redisMsg.Task, redisMsg.APIKey, db)
 	if err != nil {
 		log.Printf("Failed to process message: %s", err)
 		return
@@ -108,12 +109,12 @@ func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Request failed with status code: %d", resp.StatusCode)
-		handleRequestFailure(ctx, rdb, redisMsg, newTask)
+		handleRequestFailure(ctx, rdb, redisMsg, newTask, db)
 		return
 	}
 }
 
-func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessage, task types.Task) {
+func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessage, task types.Task, db *sql.DB) {
 	if task.Retries > 3 {
 		log.Printf("Task failed after 3 retries")
 		err := pushToFailedQueue(ctx, rdb, msg)
@@ -128,7 +129,7 @@ func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessa
 	backOffTime := math.Pow(2, float64(task.Retries)) * 1000
 	time.Sleep(time.Duration(backOffTime) * time.Millisecond)
 
-	resp, newTask, _, err := src.ProcessMessage(task, msg.APIKey)
+	resp, newTask, _, err := src.ProcessMessage(task, msg.APIKey, db)
 	if err != nil {
 		log.Printf("Failed to process message: %s", err)
 		return
@@ -138,7 +139,7 @@ func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessa
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Request failed with status code: %d", resp.StatusCode)
 		msg.Task = newTask
-		handleRequestFailure(ctx, rdb, msg, newTask)
+		handleRequestFailure(ctx, rdb, msg, newTask, db)
 		return
 	}
 }
@@ -152,7 +153,7 @@ func pushToFailedQueue(ctx context.Context, rdb *redis.Client, msg RedisMessage)
 	return rdb.LPush(ctx, FailedQueue, jsonData).Err()
 }
 
-func processQueue(ctx context.Context, rdb *redis.Client, queue string) {
+func processQueue(ctx context.Context, rdb *redis.Client, db *sql.DB, queue string) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -169,7 +170,7 @@ func processQueue(ctx context.Context, rdb *redis.Client, queue string) {
 			}
 
 			// result[0] is the queue name, result[1] is the message
-			handleMessage(ctx, rdb, queue, result[1])
+			handleMessage(ctx, rdb, queue, result[1], db)
 		}
 	}
 }
@@ -185,7 +186,13 @@ func main() {
 		log.Fatalf("Failed to initialize email dialer: %s", err)
 	}
 
+	db, err := src.InitDB()
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %s", err)
+	}
+
 	rdb, err := initRedisClient()
+
 	if err != nil {
 		log.Fatalf("Failed to initialize Redis client: %s", err)
 	}
@@ -195,8 +202,8 @@ func main() {
 	defer cancel()
 
 	// Start goroutines for each queue
-	go processQueue(ctx, rdb, HighPriorityQueue)
-	go processQueue(ctx, rdb, LowPriorityQueue)
+	go processQueue(ctx, rdb, db, HighPriorityQueue)
+	go processQueue(ctx, rdb, db, LowPriorityQueue)
 	go processEmailQueue(ctx, rdb)
 
 	log.Println("Redis consumer started. Waiting for messages...")
