@@ -34,17 +34,30 @@ func SendEmail(msg types.EmailMessage) error {
 	m.SetHeader("Subject", msg.Subject)
 
 	if msg.IsHTML {
-		m.SetBody("text/html", msg.Content)
+		content := msg.Content
+		if msg.Content == "welcome" {
+			content = WelcomeHtml
+		}
+		m.SetBody("text/html", content)
 	} else {
 		m.SetBody("text/plain", msg.Content)
 	}
-
+	fmt.Printf("Sending email to %s\n", msg.To)
+	fmt.Printf("Email content: %s\n", msg.Content)
+	fmt.Printf("Email subject: %s\n", msg.Subject)
+	fmt.Printf("Email from: %s\n", msg.From)
 	return emailDialer.DialAndSend(m)
 }
 
 func SendSuccessEmail(response *types.AgentResponse, user *types.User) error {
-	viewEndpoint := fmt.Sprintf("%s/memories/%s", FAST_API_SERVER, response.MemoryID)
-	chatEndpoint := fmt.Sprintf("%s/chat/%s", FAST_API_SERVER, response.MemoryID)
+	viewEndpoint := fmt.Sprintf("%s/memories", "www.mindkeeperai.com")
+	chatEndpoint := fmt.Sprintf("%s/memories/chat/%s", "www.mindkeeperai.com", response.MemoryID)
+
+	title := response.Title
+
+	if title != "" {
+		title = fmt.Sprintf("titled <strong>%s</strong>", title)
+	}
 
 	htmlContent := fmt.Sprintf(`
         <html>
@@ -52,12 +65,12 @@ func SendSuccessEmail(response *types.AgentResponse, user *types.User) error {
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #2c3e50;">Hello %s! 🎉</h2>
                 
-                <p>Great news! Your memory titled "<strong>%s</strong>" has been successfully added to MindKeeper.</p>
+                <p>Great news! Your memory %s has been successfully added to MindKeeper.</p>
                 
                 <div style="margin: 25px 0;">
                     <p>You can now:</p>
                     <ul>
-                        <li><a href="%s" style="color: #3498db;">View your memory</a></li>
+                        <li><a href="%s" style="color: #3498db;">View all memories</a></li>
                         <li><a href="%s" style="color: #3498db;">Chat with your memory</a></li>
                     </ul>
                 </div>
@@ -66,23 +79,27 @@ func SendSuccessEmail(response *types.AgentResponse, user *types.User) error {
                 
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
                     <p style="color: #95a5a6; font-size: 0.9em;">
-                        If you have any questions or need assistance, please don't hesitate to reach out to our support team.
+                        If you have any questions or need assistance, please don't hesitate to reach out to our support team by replying to this email.
                     </p>
                 </div>
             </div>
         </body>
         </html>
-    `, user.Name, response.Title, viewEndpoint, chatEndpoint, response.MemoryID)
+    `, user.Name, title, viewEndpoint, chatEndpoint, response.MemoryID)
 
 	msg := types.EmailMessage{
-		From:    "noreply@mindkeeperai.com",
+		From:    "info@mindkeeperai.com",
 		To:      user.Email,
 		Subject: "Memory Added Successfully - MindKeeper",
 		Content: htmlContent,
 		IsHTML:  true,
 	}
 
-	return SendEmail(msg)
+	err := SendEmail(msg)
+	if err != nil {
+		fmt.Printf("Failed to send success email: %s", err)
+	}
+	return err
 }
 
 func SendErrorEmail(agentError *types.AgentError, user *types.User) error {
@@ -110,12 +127,16 @@ func SendErrorEmail(agentError *types.AgentError, user *types.User) error {
     `, user.Name, agentError.Error)
 
 	msg := types.EmailMessage{
-		From:    "noreply@mindkeeperai.com",
+		From:    "info@mindkeeperai.com",
 		To:      user.Email,
 		Subject: "Error Adding Memory - MindKeeper",
 		Content: htmlContent,
 		IsHTML:  true,
 	}
 
-	return SendEmail(msg)
+	err := SendEmail(msg)
+	if err != nil {
+		fmt.Printf("Failed to send error email: %s", err)
+	}
+	return err
 }

@@ -78,7 +78,7 @@ class StatusTracker:
         if error is not None:
             current_data["error"] = error
 
-        ttl = 60 * 60 * 24  # 24 hours
+        ttl = 60 * 60  # 1 hour
         if current_data.get("status") == ProcessingStatus.COMPLETED.value:
             ttl = 10 * 60
         self.redis_client.set(key, json.dumps(current_data), ex=ttl)

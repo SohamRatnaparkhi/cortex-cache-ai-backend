@@ -81,5 +81,4 @@ def web_scraper(link: str):
     print("URL: ", JINA_AI_BASE_WEB_SCRAPER + link)
     jina_web_scraper_client = Client.JinaAIClient(
         JINA_AI_BASE_WEB_SCRAPER + link, isReader=True)
-    print(jina_web_scraper_client.isReader)
     return jina_web_scraper_client.get()

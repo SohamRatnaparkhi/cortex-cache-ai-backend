@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"math"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"github.com/sohamratnaparkhi/cortex-cache-ai-backend/consumer/src"
@@ -27,6 +29,96 @@ const (
 type RedisMessage struct {
 	Task   types.Task `json:"task"`
 	APIKey string     `json:"api_key"`
+}
+
+type StatusResponse struct {
+	Status    string `json:"status"`
+	Redis     string `json:"redis"`
+	Database  string `json:"database"`
+	Timestamp string `json:"timestamp"`
+	Uptime    string `json:"uptime"`
+}
+
+var (
+	startTime time.Time
+	rdb       *redis.Client
+	db        *sql.DB
+)
+
+func statusHandler(c *gin.Context) {
+	status := StatusResponse{
+		Status:    "healthy",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Uptime:    time.Since(startTime).Round(time.Second).String(),
+	}
+
+	// Check Redis connection
+	if _, err := rdb.Ping(c).Result(); err != nil {
+		status.Status = "degraded"
+		status.Redis = "unavailable"
+	} else {
+		status.Redis = "connected"
+	}
+
+	// Check Database connection
+	if err := db.PingContext(c); err != nil {
+		status.Status = "degraded"
+		status.Database = "unavailable"
+	} else {
+		status.Database = "connected"
+	}
+
+	if status.Status != "healthy" {
+		c.JSON(http.StatusServiceUnavailable, status)
+		return
+	}
+
+	c.JSON(http.StatusOK, status)
+}
+
+func setupRouter() *gin.Engine {
+	// Set Gin to release mode in production
+	if os.Getenv("GIN_MODE") != "debug" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r := gin.Default()
+
+	// Add basic middleware
+	r.Use(gin.Recovery())
+	r.Use(gin.Logger())
+
+	// Health check endpoint
+	r.GET("/health", statusHandler)
+
+	return r
+}
+
+func startHTTPServer(ctx context.Context) *http.Server {
+	router := setupRouter()
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Printf("Failed to load .env file: %s", err)
+	}
+
+	PORT := os.Getenv("PORT")
+	if PORT == "" {
+		PORT = "8080"
+	}
+
+	server := &http.Server{
+		Addr:    ":" + PORT,
+		Handler: router,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("HTTP server error: %v", err)
+		}
+	}()
+
+	return server
 }
 
 func initRedisClient() (*redis.Client, error) {
@@ -91,7 +183,7 @@ func retryEmailSend(ctx context.Context, rdb *redis.Client, msg types.EmailMessa
 	log.Printf("Successfully sent email to %s after %d retries", msg.To, retryCount+1)
 }
 
-func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message string) {
+func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message string, db *sql.DB) {
 	var redisMsg RedisMessage
 	err := json.Unmarshal([]byte(message), &redisMsg)
 	if err != nil {
@@ -99,7 +191,7 @@ func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message
 		return
 	}
 
-	resp, newTask, _, err := src.ProcessMessage(redisMsg.Task, redisMsg.APIKey)
+	resp, newTask, _, err := src.ProcessMessage(redisMsg.Task, redisMsg.APIKey, db)
 	if err != nil {
 		log.Printf("Failed to process message: %s", err)
 		return
@@ -108,12 +200,12 @@ func handleMessage(ctx context.Context, rdb *redis.Client, queue string, message
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Request failed with status code: %d", resp.StatusCode)
-		handleRequestFailure(ctx, rdb, redisMsg, newTask)
+		handleRequestFailure(ctx, rdb, redisMsg, newTask, db)
 		return
 	}
 }
 
-func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessage, task types.Task) {
+func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessage, task types.Task, db *sql.DB) {
 	if task.Retries > 3 {
 		log.Printf("Task failed after 3 retries")
 		err := pushToFailedQueue(ctx, rdb, msg)
@@ -128,7 +220,7 @@ func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessa
 	backOffTime := math.Pow(2, float64(task.Retries)) * 1000
 	time.Sleep(time.Duration(backOffTime) * time.Millisecond)
 
-	resp, newTask, _, err := src.ProcessMessage(task, msg.APIKey)
+	resp, newTask, _, err := src.ProcessMessage(task, msg.APIKey, db)
 	if err != nil {
 		log.Printf("Failed to process message: %s", err)
 		return
@@ -138,7 +230,7 @@ func handleRequestFailure(ctx context.Context, rdb *redis.Client, msg RedisMessa
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Request failed with status code: %d", resp.StatusCode)
 		msg.Task = newTask
-		handleRequestFailure(ctx, rdb, msg, newTask)
+		handleRequestFailure(ctx, rdb, msg, newTask, db)
 		return
 	}
 }
@@ -152,7 +244,7 @@ func pushToFailedQueue(ctx context.Context, rdb *redis.Client, msg RedisMessage)
 	return rdb.LPush(ctx, FailedQueue, jsonData).Err()
 }
 
-func processQueue(ctx context.Context, rdb *redis.Client, queue string) {
+func processQueue(ctx context.Context, rdb *redis.Client, db *sql.DB, queue string) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -169,12 +261,14 @@ func processQueue(ctx context.Context, rdb *redis.Client, queue string) {
 			}
 
 			// result[0] is the queue name, result[1] is the message
-			handleMessage(ctx, rdb, queue, result[1])
+			handleMessage(ctx, rdb, queue, result[1], db)
 		}
 	}
 }
 
 func main() {
+	startTime = time.Now()
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Printf("Failed to load .env file: %s", err)
@@ -185,7 +279,12 @@ func main() {
 		log.Fatalf("Failed to initialize email dialer: %s", err)
 	}
 
-	rdb, err := initRedisClient()
+	db, err = src.InitDB()
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %s", err)
+	}
+
+	rdb, err = initRedisClient()
 	if err != nil {
 		log.Fatalf("Failed to initialize Redis client: %s", err)
 	}
@@ -194,12 +293,15 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start goroutines for each queue
-	go processQueue(ctx, rdb, HighPriorityQueue)
-	go processQueue(ctx, rdb, LowPriorityQueue)
+	// Start HTTP server
+	server := startHTTPServer(ctx)
+
+	// Start queue processing goroutines
+	go processQueue(ctx, rdb, db, HighPriorityQueue)
+	go processQueue(ctx, rdb, db, LowPriorityQueue)
 	go processEmailQueue(ctx, rdb)
 
-	log.Println("Redis consumer started. Waiting for messages...")
+	log.Printf("Redis consumer started. HTTP server listening on %s", server.Addr)
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -207,6 +309,15 @@ func main() {
 	<-sigChan
 
 	log.Println("Received termination signal. Shutting down...")
+
+	// Shutdown HTTP server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	}
+
 	cancel()
 	time.Sleep(time.Second) // Give goroutines time to clean up
 }
