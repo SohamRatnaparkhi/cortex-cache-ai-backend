@@ -18,6 +18,12 @@ from app.utils.prompts.frameworks import (CHAT_AND_MEMORY_FRAMEWORK,
 
 def determine_framework_type(context: Optional[str], memory: Optional[str], web_data: Optional[str]) -> FrameworkType:
     """Determine which framework to use based on available data."""
+    if len(context) == 0:
+        context = None
+    if len(memory) == 0:
+        memory = None
+    if len(web_data) == 0:
+        web_data = None
     if context and memory:
         return FrameworkType.CHAT_AND_MEMORY
     elif context and web_data:
