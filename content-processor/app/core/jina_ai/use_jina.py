@@ -1,4 +1,5 @@
-from typing import List, Union
+import asyncio
+from typing import Any, Dict, List, Optional, Union
 
 from app.core.jina_ai import Client
 
@@ -77,8 +78,28 @@ def get_embedding(data: List[str], task: Union[str, None] = 'retrieval.passage',
     return final_res
 
 
-def web_scraper(link: str):
+async def web_scraper(link: str, max_retries: int = 10, retry_delay: float = 1.0) -> Optional[Dict[Any, Any]]:
     print("URL: ", JINA_AI_BASE_WEB_SCRAPER + link)
+
     jina_web_scraper_client = Client.JinaAIClient(
         JINA_AI_BASE_WEB_SCRAPER + link, isReader=True)
-    return jina_web_scraper_client.get()
+    for retry in range(max_retries):
+        try:
+            response = await jina_web_scraper_client.get()
+            if response is not None and response.get("data") is not None:
+                print(f"Web Scraper Response: {response}")
+                return response
+
+            # If we didn't get valid data, wait before retrying
+            # This allows other tasks to run during the wait
+            jina_web_scraper_client.retry += 1
+            print(
+                f"Attempt {retry + 1} failed, retrying after {retry_delay} seconds...")
+            await asyncio.sleep(retry_delay)
+
+        except Exception as e:
+            print(f"Error during attempt {retry + 1}: {str(e)}")
+            await asyncio.sleep(retry_delay)
+
+    print(f"Failed to get valid response after {max_retries} attempts")
+    return None

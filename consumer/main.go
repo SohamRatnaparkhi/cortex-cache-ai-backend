@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -97,9 +98,11 @@ func setupRouter() *gin.Engine {
 func startHTTPServer(ctx context.Context) *http.Server {
 	router := setupRouter()
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Printf("Failed to load .env file: %s", err)
+	// check if .env file exists
+	_, err := os.Stat(".env")
+
+	if err == nil || os.IsNotExist(err) {
+		_ = godotenv.Load()
 	}
 
 	PORT := os.Getenv("PORT")
@@ -245,6 +248,10 @@ func pushToFailedQueue(ctx context.Context, rdb *redis.Client, msg RedisMessage)
 }
 
 func processQueue(ctx context.Context, rdb *redis.Client, db *sql.DB, queue string) {
+	// Create a worker pool
+	workers := 4 // number of parallel workers
+	sem := make(chan struct{}, workers)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -255,13 +262,19 @@ func processQueue(ctx context.Context, rdb *redis.Client, db *sql.DB, queue stri
 			if err != nil {
 				if err != redis.Nil && err != context.Canceled {
 					log.Printf("Error reading from queue %s: %v", queue, err)
-					time.Sleep(time.Second) // Wait before retrying
+					time.Sleep(time.Second)
 				}
 				continue
 			}
 
-			// result[0] is the queue name, result[1] is the message
-			handleMessage(ctx, rdb, queue, result[1], db)
+			// Acquire semaphore
+			sem <- struct{}{}
+
+			// Process message in goroutine
+			go func(message string) {
+				defer func() { <-sem }() // Release semaphore when done
+				handleMessage(ctx, rdb, queue, message, db)
+			}(result[1])
 		}
 	}
 }
@@ -269,9 +282,11 @@ func processQueue(ctx context.Context, rdb *redis.Client, db *sql.DB, queue stri
 func main() {
 	startTime = time.Now()
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Printf("Failed to load .env file: %s", err)
+	_, err := os.Stat(".env")
+	fmt.Print(err)
+	if err == nil || os.IsNotExist(err) {
+		fmt.Print("Loading env")
+		_ = godotenv.Load()
 	}
 
 	err = src.InitEmailDialer()

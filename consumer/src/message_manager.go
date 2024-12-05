@@ -41,9 +41,10 @@ func GetApikeyFromHeaders(message *sarama.ConsumerMessage) (string, error) {
 			break
 		}
 	}
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Failed to load .env file: %s", err)
+	_, err := os.Stat(".env")
+
+	if err == nil || os.IsNotExist(err) {
+		_ = godotenv.Load()
 	}
 
 	fastApiServer := os.Getenv("FAST_API_SERVER")
@@ -76,9 +77,10 @@ func GetApikeyFromHeaders(message *sarama.ConsumerMessage) (string, error) {
 }
 
 func MakeRequest(endpoint string, data []byte, apiKey string) (*http.Response, error) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Failed to load .env file: %s", err)
+	_, err := os.Stat(".env")
+
+	if err == nil || os.IsNotExist(err) {
+		_ = godotenv.Load()
 	}
 
 	fastApiServer := os.Getenv("FAST_API_SERVER")
