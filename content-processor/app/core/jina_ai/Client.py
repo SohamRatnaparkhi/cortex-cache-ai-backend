@@ -42,14 +42,13 @@ class JinaAIClient():
             headers["Accept"] = "application/json"
             headers.pop("Content-Type")
             headers["X-Remove-Selector"] = "img, a"
-            headers["X-Timeout"] = "60"
+            headers["X-Timeout"] = "40"
             headers["X-Proxy-Url"] = get_random_proxy()
         return headers
 
     def get(self, endpoint=''):
         headers = self.get_random_header()
         # print(self.isReader)
-        # print(headers)
         response = requests.get(self.base_url + endpoint, headers=headers)
         # print(response.json())
         return response.json()

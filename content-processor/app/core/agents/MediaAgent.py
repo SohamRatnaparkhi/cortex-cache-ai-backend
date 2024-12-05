@@ -135,6 +135,9 @@ class VideoAgent(MediaAgent):
             return response
         except Exception as e:
             print(f"Detailed error: {str(e)}")
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(f"Error processing video: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], memId: str) -> None:
@@ -232,6 +235,9 @@ class AudioAgent(MediaAgent):
             )
             return response
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(f"Error processing audio: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], memId: str) -> None:
@@ -317,6 +323,9 @@ class ImageAgent(MediaAgent):
             )
             return response
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(f"Error processing image: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], metadata: List[Metadata], memId: str) -> None:
@@ -420,6 +429,9 @@ class File_PDFAgent(MediaAgent):
             )
             return response
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(f"Error processing PDF: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], preprocessed_chunks: List[str], metadata: List[Metadata], memId: str) -> None:

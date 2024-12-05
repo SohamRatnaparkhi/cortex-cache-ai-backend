@@ -301,6 +301,9 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             )
 
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise Exception(f"Error processing YouTube video: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], meta_chunks: List[TextSpecificMd], memId: str):
@@ -339,55 +342,61 @@ class WebAgent(LinkAgent[TextSpecificMd]):
         """
         Process a web page, extract its text, and segment it into chunks.
         """
-        link = self.resource_link
-        memId = str(uuid.uuid4())
-        TRACKER.create_status(
-            self.md.user_id, memId, self.md.title)
-        response = use_jina.web_scraper(link)
-        print(f"Web Scraper Response: {response}")
-        retry = 4
-        while response is None or response.get("data") is None and retry > 0:
+        try:
+            link = self.resource_link
+            memId = str(uuid.uuid4())
+            TRACKER.create_status(
+                self.md.user_id, memId, self.md.title)
             response = use_jina.web_scraper(link)
-            retry -= 1
-        if response is not None:
-            content = response.get("data").get("content")
-            title = response.get("data").get("title")
-            description = response.get("data").get("description")
+            print(f"Web Scraper Response: {response}")
+            retry = 10
+            while response is None or response.get("data") is None and retry > 0:
+                response = use_jina.web_scraper(link)
+                retry -= 1
+            if response is not None:
+                content = response.get("data").get("content")
+                title = response.get("data").get("title")
+                description = response.get("data").get("description")
 
-            #  filter all tags from content
-            content = re.sub(r'<[^>]+>', '', content)
-            chunks = use_jina.segment_data(content)
-            # if chunks is not None and "chunks" in chunks.keys():
-            #     chunks = chunks["chunks"]
+                #  filter all tags from content
+                content = re.sub(r'<[^>]+>', '', content)
+                chunks = use_jina.segment_data(content)
+                # if chunks is not None and "chunks" in chunks.keys():
+                #     chunks = chunks["chunks"]
 
-            self.md.memId = memId
-            self.md.title += " " + title
-            self.md.description += " " + description
-            TRACKER.update_status(
-                self.md.user_id, memId, ProcessingStatus.PROCESSING, 20)
-            meta_chunks = []
-            for i in range(len(chunks)):
-                tmd = TextSpecificMd(
-                    chunk_id=f'{memId}_{i}',
-                    url=link,
+                self.md.memId = memId
+                self.md.title += " " + title
+                self.md.description += " " + description
+                TRACKER.update_status(
+                    self.md.user_id, memId, ProcessingStatus.PROCESSING, 20)
+                meta_chunks = []
+                for i in range(len(chunks)):
+                    tmd = TextSpecificMd(
+                        chunk_id=f'{memId}_{i}',
+                        url=link,
+                    )
+                    md_copy = self.md.model_copy()
+                    md_copy.specific_desc = tmd
+                    meta_chunks.append(md_copy)
+
+                await self.embed_and_store_chunks(chunks, meta_chunks)
+                TRACKER.update_status(
+                    self.md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, 85)
+                await self.store_memory_in_database(chunks, meta_chunks, memId)
+                TRACKER.update_status(
+                    self.md.user_id, memId, ProcessingStatus.COMPLETED, 100)
+                return AgentResponse(
+                    chunks=chunks,
+                    metadata=meta_chunks,
+                    transcript=content,
+                    userId=self.md.user_id,
+                    memoryId=memId,
                 )
-                md_copy = self.md.model_copy()
-                md_copy.specific_desc = tmd
-                meta_chunks.append(md_copy)
-
-            await self.embed_and_store_chunks(chunks, meta_chunks)
+        except Exception as e:
             TRACKER.update_status(
-                self.md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, 85)
-            await self.store_memory_in_database(chunks, meta_chunks, memId)
-            TRACKER.update_status(
-                self.md.user_id, memId, ProcessingStatus.COMPLETED, 100)
-            return AgentResponse(
-                chunks=chunks,
-                metadata=meta_chunks,
-                transcript=content,
-                userId=self.md.user_id,
-                memoryId=memId,
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
             )
+            raise Exception(f"Error processing web page: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], meta_chunks: List[TextSpecificMd], memId: str):
         try:
