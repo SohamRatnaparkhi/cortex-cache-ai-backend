@@ -72,7 +72,7 @@ var WelcomeHtml = `
 
         <div style="text-align: center;">
             <a href="https://www.mindkeeperai.com/" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
-                Start Adding Memories →
+                Start Adding Memories + →
             </a>
         </div>
     </div>
