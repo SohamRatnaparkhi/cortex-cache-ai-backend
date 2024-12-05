@@ -9,5 +9,9 @@ proxies = [
 ]
 
 
-def get_random_proxy():
+def get_random_proxy(app='yt', index=0):
+    if app == 'yt':
+        return proxies[0]
+    if index < len(proxies):
+        return proxies[index]
     return random.choice(proxies)

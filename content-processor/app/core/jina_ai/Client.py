@@ -1,6 +1,7 @@
 import os
 import random
 
+import aiohttp
 import requests
 from dotenv import load_dotenv
 
@@ -31,6 +32,7 @@ class JinaAIClient():
     def __init__(self, base_url, isReader=False):
         self.base_url = base_url
         self.isReader = isReader
+        self.retry = 0
 
     def get_random_header(self):
         key = randomly_choose_one_key_with_equal_prob()
@@ -42,16 +44,27 @@ class JinaAIClient():
             headers["Accept"] = "application/json"
             headers.pop("Content-Type")
             headers["X-Remove-Selector"] = "img, a"
-            headers["X-Timeout"] = "40"
-            headers["X-Proxy-Url"] = get_random_proxy()
+            headers["X-Timeout"] = "60"
+            # headers["X-Proxy-Url"] = get_random_proxy(
+            #     index=self.retry)
         return headers
 
-    def get(self, endpoint=''):
+    async def get(self, endpoint=''):
         headers = self.get_random_header()
-        # print(self.isReader)
-        response = requests.get(self.base_url + endpoint, headers=headers)
-        # print(response.json())
-        return response.json()
+        async with aiohttp.ClientSession() as session:
+            try:
+                print("Headers: ", headers)
+                # if self.retry == 10:
+                #     headers.pop("X-Proxy-Url")
+                proxyIp = get_random_proxy(app='yt')
+                async with session.get(self.base_url + endpoint, headers=headers, proxy=proxyIp) as response:
+                    return await response.json()
+            except aiohttp.ClientError as e:
+                # Handle network-related errors
+                raise Exception(f"Network error occurred: {str(e)}")
+            except ValueError as e:
+                # Handle JSON decode errors
+                raise Exception(f"JSON decode error: {str(e)}")
 
     def post(self, data, endpoint=''):
         headers = self.get_random_header()

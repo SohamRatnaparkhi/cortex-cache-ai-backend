@@ -102,7 +102,7 @@ class TranscriptChunker:
                 channel_name = data.get("author_url", "Unknown").split('/')[-1]
 
             # Get transcript
-            proxyIp = get_random_proxy()
+            proxyIp = get_random_proxy(app='yt')
             print(f"Using proxy: {proxyIp}")
             transcript = YouTubeTranscriptApi.get_transcript(
                 video_id, proxies={
