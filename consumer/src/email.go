@@ -34,7 +34,11 @@ func SendEmail(msg types.EmailMessage) error {
 	m.SetHeader("Subject", msg.Subject)
 
 	if msg.IsHTML {
-		m.SetBody("text/html", msg.Content)
+		content := msg.Content
+		if msg.Content == "welcome" {
+			content = WelcomeHtml
+		}
+		m.SetBody("text/html", content)
 	} else {
 		m.SetBody("text/plain", msg.Content)
 	}
