@@ -192,7 +192,7 @@ async def handle_query_response(
             return {
                 "curr_ans": memory_data,
                 "query": llm_query,
-                "prompt": get_pro_answer_prompt(query, llm_query, context, memory_data, web_data)
+                "prompt": get_pro_answer_prompt(query, llm_query, context, memory_data, web_data, len(chunk_ids))
                 if query.is_pro else final_ans_prompt + memory_data,
                 "messageId": message.id
             }
@@ -280,7 +280,7 @@ def format_pxity_results_to_xml(results: list[dict], query: str, agent='web') ->
     return f"<question>{query}</question>\n<content>\n{xml_content}</content>", citations
 
 
-def get_pro_answer_prompt(query: QueryRequest, llm_query: str, context: str, memory_data: str, web_data: str = "") -> str:
+def get_pro_answer_prompt(query: QueryRequest, llm_query: str, context: str, memory_data: str, web_data: str = "", total_memories: int = 0) -> str:
     """Get prompt for pro users."""
     prompt_context = PromptContext(
         original_query=query.query,
@@ -291,7 +291,8 @@ def get_pro_answer_prompt(query: QueryRequest, llm_query: str, context: str, mem
         use_memory=query.use_memory,
         agent=query.agent,
         web_agents=query.web_sources,
-        web_data=web_data
+        web_data=web_data,
+        total_memories=total_memories
     )
     return get_final_pro_answer_prompt(
         prompt_context,

@@ -16,21 +16,21 @@ from app.utils.prompts.frameworks import (CHAT_AND_MEMORY_FRAMEWORK,
                                           WEB_ONLY_FRAMEWORK)
 
 
-def determine_framework_type(context: Optional[str], memory: Optional[str], web_data: Optional[str]) -> FrameworkType:
+def determine_framework_type(context: Optional[str], use_memory: bool, web_data: Optional[str], total_memories) -> FrameworkType:
     """Determine which framework to use based on available data."""
-    if len(context) == 0:
+    if context and len(context) == 0:
         context = None
-    if len(memory) == 0:
+    if not use_memory or total_memories == 0:
         memory = None
-    if len(web_data) == 0:
+    if web_data and len(web_data) == 0:
         web_data = None
-    if context and memory:
+    if context and use_memory:
         return FrameworkType.CHAT_AND_MEMORY
     elif context and web_data:
         return FrameworkType.CHAT_AND_WEB
-    elif memory and web_data:
+    elif use_memory and web_data:
         return FrameworkType.MEMORY_AND_WEB
-    elif memory:
+    elif use_memory:
         return FrameworkType.MEMORY_ONLY
     elif web_data:
         return FrameworkType.WEB_ONLY
@@ -118,8 +118,9 @@ Chat Context: {prompt_ctx.context or "No chat context available"}
     # Determine and add appropriate framework
     framework_type = determine_framework_type(
         prompt_ctx.context,
-        prompt_ctx.initial_answer,
-        prompt_ctx.web_data
+        prompt_ctx.use_memory,
+        prompt_ctx.web_data,
+        prompt_ctx.total_memories
     )
 
     framework = FRAMEWORKS[framework_type.value]
