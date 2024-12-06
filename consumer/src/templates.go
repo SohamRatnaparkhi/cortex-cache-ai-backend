@@ -5,7 +5,7 @@ var WelcomeHtml = `
     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <!-- Header -->
     <div style="text-align: center; margin-bottom: 30px;">
-        <img src="https://www.mindkeeperai.com/favicon.svg" alt="Mindkeeper AI" style="width: 60px; height: 60px; margin-bottom: 20px;">
+        <img src="https://www.mindkeeperai.com/favicon.png" alt="Mindkeeper AI" style="width: 60px; height: 60px; margin-bottom: 20px;">
         <h1 style="color: #2563eb; margin: 20px 0;">Your Digital Brain Awaits!</h1>
         <p style="color: #475569; font-size: 18px;">Welcome to MindKeeper AI - the second brain you always needed.</p>
     </div>
