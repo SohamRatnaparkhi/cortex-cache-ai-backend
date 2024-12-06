@@ -21,6 +21,7 @@ class PromptContext:
     is_stream: bool = True
     use_memory: bool = True
     agent: str = 'default'
+    total_memories: int = 0
 
 
 class FrameworkType(Enum):
