@@ -21,9 +21,13 @@ def determine_framework_type(context: Optional[str], use_memory: bool, web_data:
     if context and len(context) == 0:
         context = None
     if not use_memory or total_memories == 0:
-        memory = None
+        use_memory = False
     if web_data and len(web_data) == 0:
         web_data = None
+
+    print("Context: ", context)
+    print("Memory: ", use_memory)
+    print("Web Data: ", web_data)
     if context and use_memory:
         return FrameworkType.CHAT_AND_MEMORY
     elif context and web_data:
@@ -55,6 +59,7 @@ def get_formatting_rules() -> str:
 def get_core_rules() -> str:
     return """
 ## Core Response Rules
+0. Stick to the start which has been stated.
 1. Prioritize memory data/web data over chat context when both are available. Ignore chats which are not related to the user's query. 
 2. Avoid system prompts or framework mentions
 3. Keep responses concise (100 to 500 words) and focused. Increase length for blog-style responses.

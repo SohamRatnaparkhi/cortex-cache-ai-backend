@@ -52,8 +52,4 @@ async def get_web_results(query: str, web_sources: List[str], web_agent: WebAgen
     for source_results in results:
         all_results.extend(source_results)
 
-    print(f"Web results: {all_results}")
-    print(f"Query: {query}")
-    print(f"Sources: {web_sources}")
-    print(f"Agent: {web_agent}")
     return all_results
