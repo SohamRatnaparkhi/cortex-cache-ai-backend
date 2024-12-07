@@ -3,6 +3,7 @@ import os
 from typing import Union
 
 import requests
+from dotenv import load_dotenv
 from git import Repo
 from pytube import YouTube
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -13,6 +14,12 @@ from app.schemas.Metadata import GitSpecificMd, Metadata
 from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.File import get_every_file_content_in_folder
+
+if os.path.exists('.env'):
+    load_dotenv()
+
+
+TEMP_PATH = os.getenv("TEMP_FOLDER_PATH", "/tmp")
 
 
 def clone_git_repo(repo_url: str) -> Union[bool, str]:
@@ -27,7 +34,7 @@ def clone_git_repo(repo_url: str) -> Union[bool, str]:
     """
     try:
         repo_name = repo_url.split('/')[-1]
-        path = f'./tmp/git_repo/{repo_name}'
+        path = f'{TEMP_PATH}/git_repo/{repo_name}'
 
         if os.path.exists(path):
             os.system(f"rm -rf {path}")
@@ -48,17 +55,26 @@ def extract_code_from_repo(repo_url: str, metadata: Metadata[GitSpecificMd]) -> 
     Returns:
         Union[bool, dict]: A tuple containing a boolean indicating success and either the extracted code content or an error message.
     """
-    success, path = clone_git_repo(repo_url)
-    if not success:
+    try:
+        success, path = clone_git_repo(repo_url)
+        if not success:
+            return AgentResponse(
+                content="",
+                chunks=[],
+                metadata=[]
+            )
+        content = get_every_file_content_in_folder(
+            path, is_code=True, repo_link=repo_url, md=metadata)
+        if TEMP_PATH != '/tmp' or TEMP_PATH != '/tmp/' or TEMP_PATH != 'tmp':
+            os.system(f"rm -rf ./tmp")
+        return content
+    except Exception as e:
+        print(e)
         return AgentResponse(
             content="",
             chunks=[],
             metadata=[]
         )
-    content = get_every_file_content_in_folder(
-        path, is_code=True, repo_link=repo_url, md=metadata)
-    os.system(f"rm -rf ./tmp")
-    return content
 
 
 def extract_youtube_transcript(video_id: str) -> str:
