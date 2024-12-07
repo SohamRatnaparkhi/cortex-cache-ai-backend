@@ -14,6 +14,7 @@ from app.schemas.query.query_related_types import (ChatContext, MessageContent,
                                                    QueryRequest)
 from app.services.Memory import get_final_results_from_memory
 from app.services.messages import insert_message_in_db
+from app.utils import llms
 from app.utils.app_logger_config import logger
 from app.utils.llms import get_answer_llm
 from app.utils.Preprocessor import improve_query, preprocess_query
@@ -41,7 +42,8 @@ async def process_user_query(query: QueryRequest, is_stream: bool = False) -> Di
     chat_context = await get_chat_context(
         query.conversation_id,
         query.query_id,
-        limit=2
+        limit=5 if query.is_pro else 2,
+        is_pro=query.is_pro
     )
 
     context = chat_context.context
@@ -157,7 +159,7 @@ async def handle_query_response(
         if web_based_reranking and len(web_based_reranking) > 0:
             formatter = WebDataFormatter(ContentLimits(
                 MAX_RESULTS=5,
-                MAX_CONTENT_LENGTH=800,
+                MAX_CONTENT_LENGTH=1000,
                 MAX_TOTAL_LENGTH=4000,
                 MIN_SENTENCE_SCORE=0.3
             ))
@@ -324,7 +326,7 @@ async def stream_response(
         async for chunk in llm.astream([HumanMessage(content=prompt)]):
             chunk_text = chunk.content
             message_content.append(chunk_text)
-            print(f"Chunk {i}: {chunk_text}")
+            # print(f"Chunk {i}: {chunk_text}")
             # Format chunk for streaming
             chunk_data = chunk_text.replace('\n', '\\n')
             if first_chunk:
@@ -361,7 +363,8 @@ async def stream_response(
 async def get_chat_context(
     conversation_id: str,
     query_id: Optional[str] = None,
-    limit: int = 2
+    limit: int = 2,
+    is_pro: bool = False
 ) -> ChatContext:
     """
     Retrieve and format chat context from previous messages.
@@ -399,7 +402,9 @@ async def get_chat_context(
             elif msg.questionId in query_ids:
                 if msg.questionId not in context_map:
                     context_map[msg.questionId] = MessageContent(user="")
-                context_map[msg.questionId].ai = msg.content[:300]
+                context_map[msg.questionId].ai = cap_large_response_to_word_limit(
+                    msg.content, 300 if is_pro else 150
+                )
 
         # Format contexts
         query_context = ", ".join(
@@ -411,6 +416,11 @@ async def get_chat_context(
             for ctx in context_map.values()
         )
 
+        if is_pro:
+            full_context = await improve_context_for_pro_users(full_context)
+
+        print(full_context)
+
         return ChatContext(
             context=full_context,
             query_context=query_context,
@@ -420,3 +430,58 @@ async def get_chat_context(
     except Exception as e:
         logger.error(f"Error fetching chat context: {str(e)}")
         return ChatContext(context="", query_context="", has_conversation=bool(messages))
+
+
+def cap_large_response_to_word_limit(response: str, limit: int = 200) -> str:
+    """Cap large response to word limit."""
+    if len(response) > limit:
+        response = ' '.join(response.split()[:limit]) + '...'
+    return response
+
+
+async def improve_context_for_pro_users(context: str):
+    prompt = f"""
+You are a context preservation specialist. Create a structured summary that maintains the clear dialogue flow between User and AI, while ensuring references are clear and explicit.
+
+Guidelines:
+- Each interaction must start with either "User:" or "AI:"
+- Compress each message while keeping crucial terminology and specific details
+- Replace pronouns (it, this, that) and vague references with their specific antecedents
+- Example: If user says "Can you improve it?" replace "it" with the actual thing they're referring to
+- When summarizing, always use the specific terms/names that were introduced earlier in the conversation
+- Maintain chronological order of the conversation
+- Keep only information that would be necessary for understanding future context
+- Correct the information if required and correct all spelling mistakes
+
+Present the summary in this format:
+User: [condensed but precise version of user's question/statement, with all references made explicit]
+AI: [core elements of AI's response, maintaining key technical terms and specific details]
+
+Conversation to analyze:
+{context}
+"""
+    model = llms.gemini_model
+    response = await model.generate_content_async(
+        prompt,
+    )
+    text, token_count = process_gemini_response(response)
+
+    return text
+
+
+def process_gemini_response(response):
+    """
+    Extract text and token counts from Gemini API response
+    Returns tuple of (text, dict with token counts)
+    """
+    # Extract text from the response
+    text = response.candidates[0].content.parts[0].text
+
+    # Extract token counts
+    token_counts = {
+        'prompt_tokens': response.usage_metadata.prompt_token_count,
+        'completion_tokens': response.usage_metadata.candidates_token_count,
+        'total_tokens': response.usage_metadata.total_token_count
+    }
+
+    return text, token_counts

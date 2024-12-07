@@ -1,5 +1,6 @@
 import os
 
+import google.generativeai as genai
 from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_groq import ChatGroq
@@ -8,7 +9,7 @@ from langchain_openai import ChatOpenAI
 if os.path.exists(".env"):
     load_dotenv()
 
-
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPEN_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -47,6 +48,19 @@ memory_search_query_llm = ChatGroq(
     max_tokens=500,
     timeout=None,
     max_retries=3,
+)
+
+gemini_generation_config = {
+    "temperature": 0.2,
+    "top_p": 0.95,
+    "top_k": 40,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
+}
+
+gemini_model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    generation_config=gemini_generation_config,
 )
 
 
