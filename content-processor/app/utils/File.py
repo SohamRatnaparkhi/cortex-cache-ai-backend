@@ -155,10 +155,13 @@ def get_every_file_content_in_folder(folder_path: str, is_code: bool, repo_link:
     print(len(all_contents))
     print(len(chunks))
     print(len(metadata))
+    print("done here")
     return AgentResponse(
         transcript=all_contents,
         chunks=chunks,
-        metadata=metadata
+        metadata=metadata,
+        userId=md.user_id,
+        memoryId=md.memId
     )
 
 
