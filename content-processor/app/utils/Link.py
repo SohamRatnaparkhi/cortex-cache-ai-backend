@@ -59,21 +59,26 @@ def extract_code_from_repo(repo_url: str, metadata: Metadata[GitSpecificMd]) -> 
         success, path = clone_git_repo(repo_url)
         if not success:
             return AgentResponse(
-                content="",
+                transcript="",
                 chunks=[],
-                metadata=[]
+                metadata=[],
+                userId=metadata.user_id,
+                memoryId=metadata.memId
             )
         content = get_every_file_content_in_folder(
             path, is_code=True, repo_link=repo_url, md=metadata)
+        print("Now here")
         if TEMP_PATH != '/tmp' or TEMP_PATH != '/tmp/' or TEMP_PATH != 'tmp':
             os.system(f"rm -rf ./tmp")
         return content
     except Exception as e:
         print(e)
         return AgentResponse(
-            content="",
+            transcript="",
             chunks=[],
-            metadata=[]
+            metadata=[],
+            userId=metadata.user_id,
+            memoryId=metadata.memId
         )
 
 

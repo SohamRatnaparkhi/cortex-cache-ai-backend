@@ -59,38 +59,12 @@ func SendSuccessEmail(response *types.AgentResponse, user *types.User) error {
 		title = fmt.Sprintf("titled <strong>%s</strong>", title)
 	}
 
-	htmlContent := fmt.Sprintf(`
-        <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #2c3e50;">Hello %s! 🎉</h2>
-                
-                <p>Great news! Your memory %s has been successfully added to MindKeeper.</p>
-                
-                <div style="margin: 25px 0;">
-                    <p>You can now:</p>
-                    <ul>
-                        <li><a href="%s" style="color: #3498db;">View all memories</a></li>
-                        <li><a href="%s" style="color: #3498db;">Chat with your memory</a></li>
-                    </ul>
-                </div>
-                
-                <p style="color: #7f8c8d;">Memory ID: %s</p>
-                
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                    <p style="color: #95a5a6; font-size: 0.9em;">
-                        If you have any questions or need assistance, please don't hesitate to reach out to our support team by replying to this email.
-                    </p>
-                </div>
-            </div>
-        </body>
-        </html>
-    `, user.Name, title, viewEndpoint, chatEndpoint, response.MemoryID)
+	htmlContent := fmt.Sprintf(SuccessfulMemoryHtml, user.Name, title, viewEndpoint, chatEndpoint, response.MemoryID)
 
 	msg := types.EmailMessage{
 		From:    "info@mindkeeperai.com",
 		To:      user.Email,
-		Subject: "Memory Added Successfully - MindKeeper",
+		Subject: "Memory Added Successfully - MindKeeper AI",
 		Content: htmlContent,
 		IsHTML:  true,
 	}

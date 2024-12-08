@@ -4,6 +4,7 @@ import requests
 import tiktoken
 from youtube_transcript_api import YouTubeTranscriptApi
 
+from app.utils.google_translator import translate_text
 from app.utils.proxy import get_random_proxy
 
 
@@ -104,14 +105,35 @@ class TranscriptChunker:
             # Get transcript
             proxyIp = get_random_proxy(app='yt')
             print(f"Using proxy: {proxyIp}")
+            language_of_available_transcript = {
+                "language": "",
+                "code": ""
+            }
+
+            for transcript in YouTubeTranscriptApi.list_transcripts(video_id, proxies={
+                "https": proxyIp,
+                "http": proxyIp
+            }):
+                language_of_available_transcript["language"] = transcript.language
+                language_of_available_transcript["code"] = transcript.language_code
+                break
+
             transcript = YouTubeTranscriptApi.get_transcript(
                 video_id, proxies={
                     "https": proxyIp,
                     "http": proxyIp
-                })
+                },
+                languages=[language_of_available_transcript["code"]]
+            )
 
             # Create chunks
             chunks = self.create_chunks_from_transcript(transcript)
+
+            # print("Number of chunks: ", len(chunks))
+
+            if language_of_available_transcript["code"] != "en":
+                for chunk in chunks:
+                    chunk["text"] = await translate_text(chunk["text"])
 
             return chunks, video_title, video_desc, author, channel_name
 

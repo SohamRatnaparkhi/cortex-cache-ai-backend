@@ -174,3 +174,4 @@ youtube-transcript-api==0.6.2
 yt-dlp==2024.8.6
 zipp==3.21.0
 redis==5.2.0
+deep-translator==1.11.4

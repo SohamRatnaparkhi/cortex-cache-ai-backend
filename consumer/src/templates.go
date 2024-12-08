@@ -180,3 +180,92 @@ var WelcomeHtml = `
     </body>
     </html>
 `
+
+var SuccessfulMemoryHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" style="width: 100%%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <!-- Header with Logo -->
+        <tr>
+            <td style="padding: 40px 20px; text-align: center; background-color: #4F46E5; border-radius: 8px 8px 0 0;">
+                <img src="https://www.mindkeeperai.com/favicon.png" alt="MindKeeper AI" style="width: 180px; height: auto;">
+            </td>
+        </tr>
+        
+        <!-- Main Content -->
+        <tr>
+            <td style="padding: 40px 30px;">
+                <h1 style="margin: 0; font-size: 24px; color: #1F2937; margin-bottom: 20px;">
+                    Hello %s! 🎉
+                </h1>
+                
+                <!-- Success Message -->
+                <div style="background-color: #F0FDF4; border-left: 4px solid #22C55E; padding: 15px; margin-bottom: 25px;">
+                    <p style="margin: 0; color: #166534; font-size: 16px;">
+                        Your memory <strong>%s</strong> has been successfully added to MindKeeper AI!
+                    </p>
+                </div>
+
+                <!-- Memory Details Card -->
+                <div style="background-color: #F9FAFB; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                    <h2 style="margin: 0; font-size: 18px; color: #4F46E5; margin-bottom: 15px;">
+                        What would you like to do next?
+                    </h2>
+                    <div style="margin-bottom: 15px;">
+                        <a href="%s" style="display: inline-block; background-color: #4F46E5; color: white; text-decoration: none; padding: 12px 25px; border-radius: 6px; font-weight: bold; margin-right: 10px;">
+                            View All Memories
+                        </a>
+                        <a href="%s" style="display: inline-block; background-color: #4F46E5; color: white; text-decoration: none; padding: 12px 25px; border-radius: 6px; font-weight: bold;">
+                            Chat with Memory
+                        </a>
+                    </div>
+                    <p style="margin: 10px 0 0; color: #6B7280; font-size: 14px;">
+                        Memory ID: <span style="color: #4F46E5; font-family: monospace;">%s</span>
+                    </p>
+                </div>
+
+                <!-- Features Section -->
+                <div style="margin-bottom: 30px;">
+                    <h3 style="color: #1F2937; font-size: 16px; margin-bottom: 15px;">With MindKeeper, you can:</h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #4B5563;">
+                        <li style="margin-bottom: 10px;">Access your memories anytime, anywhere</li>
+                        <li style="margin-bottom: 10px;">Chat naturally with your stored memories</li>
+                        <li>Build your personal knowledge base</li>
+                        <li style="margin-bottom: 10px;">Collaborate with team members (coming soon...)</li>
+                    </ul>
+                </div>
+            </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+            <td style="padding: 30px; background-color: #F9FAFB; border-radius: 0 0 8px 8px;">
+                <p style="margin: 0; text-align: center; color: #6B7280; font-size: 14px;">
+                    Need help? Our support team is here for you.<br>
+                    Simply reply to this email and we'll get back to you as soon as possible.
+                </p>
+                <p style="margin: 20px 0 0; text-align: center; color: #9CA3AF; font-size: 12px;">
+                    © 2024 MindKeeper AI. All rights reserved.
+                </p>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Spacing for email clients -->
+    <table role="presentation" style="width: 100%%; max-width: 600px; margin: 0 auto;">
+        <tr>
+            <td style="padding: 20px; text-align: center;">
+                <p style="margin: 0; font-size: 12px; color: #9CA3AF;">
+                    This email was sent to you because you're a valued user of MindKeeper AI.
+                </p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+`
