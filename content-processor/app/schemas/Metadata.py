@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
@@ -52,6 +53,24 @@ class MindMapSpecificMd(BaseModel):
     central_topic: str
     subtopics: list[str]
     chunk_id: str
+
+
+class GDriveFileType(Enum):
+    GDOC = "application/vnd.google-apps.document"
+    GSHEET = "application/vnd.google-apps.spreadsheet"
+    GSLIDE = "application/vnd.google-apps.presentation"
+    PDF = "application/pdf"
+    IMAGE = "image"
+    AUDIO = "audio"
+    VIDEO = "video"
+    UNKNOWN = "unknown"
+
+
+class GDriveSpecificMd(BaseModel):
+    chunk_id: str
+    file_id: str
+    page_number: Optional[int]  # For slides
+    sheet_name: Optional[str]   # For sheets
 
 
 T = TypeVar('T')

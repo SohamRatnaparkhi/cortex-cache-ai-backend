@@ -175,3 +175,8 @@ yt-dlp==2024.8.6
 zipp==3.21.0
 redis==5.2.0
 deep-translator==1.11.4
+google-api-core==2.22.0
+google-api-python-client==2.151.0
+google-auth==2.36.0
+google-auth-httplib2==0.2.0
+google-cloud-core==2.4.1

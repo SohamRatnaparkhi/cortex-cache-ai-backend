@@ -28,11 +28,12 @@ class IntegrationAgent(ABC, Generic[T]):
         md (Metadata[T]): Metadata associated with the resource.
     """
 
-    def __init__(self, resource_link: str, access_token: str, md: Metadata[T]) -> None:
+    def __init__(self, resource_link: str, access_token: str, md: Metadata[T], refresh_token=None) -> None:
         super().__init__()
         self.resource_link = resource_link
         self.access_token = access_token
         self.md = md
+        self.refresh_token = refresh_token
 
     @abstractmethod
     def process_media(self) -> AgentResponse:
@@ -47,26 +48,33 @@ class IntegrationAgent(ABC, Generic[T]):
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
             logger.debug("l1 = " + str(len(chunks)))
+            print(self.md)
             TRACKER.update_status(
                 self.md.user_id, self.md.memId, ProcessingStatus.CREATING_EMBEDDINGS, progress=25)
             preprocessed_chunks = await update_chunks(chunks=chunks, memoryId=self.md.memId, userId=self.md.user_id)
 
+            print("done 1")
+
             title = self.md.title
             description = self.md.description
+            print("done 2")
 
             preprocessed_chunks = [
                 title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
+            print("done 3")
             # embeddings = use_jina.get_embedding(preprocessed_chunks)
 
             # embeddings = [e["embedding"]
             #               for e in embeddings if "embedding" in e.keys()]
             embeddings = voyage_client.get_embeddings(preprocessed_chunks)
+            print("done 4")
             logger.debug("l2 = " + str(len(embeddings)))
 
             logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
+            print("done 5")
 
             logger.debug(len(metadata))
             logger.debug(len(vectors))
