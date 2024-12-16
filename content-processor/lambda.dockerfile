@@ -15,6 +15,10 @@ RUN apt-get update -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# install ffmpeg
+
+RUN apt-get install -y ffmpeg
+
 # Set up environment variables
 ENV HOME=/home/appuser
 ENV PYTHONUSERBASE=/home/appuser/.local
