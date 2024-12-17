@@ -11,7 +11,7 @@ RUN useradd -m -u 1000 appuser
 
 # Install system dependencies including git
 RUN apt-get update -y && \
-    apt-get install -y openssl dos2unix curl git ffmpeg && \
+    apt-get install -y openssl dos2unix curl git ffmpeg tesseract-ocr && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
