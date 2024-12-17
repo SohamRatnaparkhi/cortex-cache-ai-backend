@@ -51,7 +51,7 @@ RUN dos2unix entry.sh && \
 USER appuser
 
 # Install Python dependencies including Prisma
-RUN pip install --user awslambdaric mangum && \
+RUN pip install --user awslambdaric mangum google.generativeai && \
     pip install --user -r requirements.txt && \
     pip install --user prisma
 

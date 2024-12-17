@@ -52,7 +52,8 @@ class StatusTracker:
         }
         self.redis_client.set(
             self._get_key(user_id, document_id),
-            json.dumps(status_data)
+            json.dumps(status_data),
+            ex=60 * 60  # 1 hour
         )
 
     def update_status(

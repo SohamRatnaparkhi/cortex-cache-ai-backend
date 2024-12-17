@@ -55,12 +55,11 @@ async def process_video(request: VideoRequest) -> AgentResponseWrapper:
 
 
 @router.post("/process/image")
-async def process_image(request: ImageRequest) -> dict:
+async def process_image(request: ImageRequest) -> AgentResponseWrapper:
     """Process  image, and transcribe."""
     try:
         transcription = await ImageService.get_image_transcript(
             request.image_id, request.metadata)
-        print(transcription)
         return AgentResponseWrapper(
             response=transcription
         )
