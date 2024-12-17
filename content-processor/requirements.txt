@@ -114,7 +114,7 @@ mutagen==1.47.0
 mypy-extensions==1.0.0
 nltk==3.9.1
 nodeenv==1.9.1
-numpy==2.0.2
+numpy==1.26.4
 openai==1.55.3
 ordered-set==4.1.0
 orjson==3.10.12
