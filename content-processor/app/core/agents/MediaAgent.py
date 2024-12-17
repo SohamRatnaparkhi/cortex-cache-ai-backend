@@ -3,7 +3,6 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Generic, List, TypeVar
 
-import pytesseract
 from PIL import Image
 from PyPDF2 import PdfReader
 
@@ -18,6 +17,7 @@ from app.utils.AV import (extract_audio_from_video,
                           process_audio_for_transcription)
 from app.utils.chunk_processing import update_chunks
 # from app.utils.chunk_preprocessing import update_chunks
+from app.utils.image import ImageDescriptionGenerator
 from app.utils.s3 import S3Operations
 from app.utils.status_tracking import TRACKER, ProcessingStatus
 from app.utils.Vectors import combine_data_chunks, get_vectors
@@ -283,8 +283,14 @@ class ImageAgent(MediaAgent):
                 user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=15
             )
             image = Image.open(io.BytesIO(image_bytes))
-            transcript = pytesseract.image_to_string(image)
 
+            processor = ImageDescriptionGenerator()
+
+            result = processor.generate_description(
+                image_bytes, self.md.title, self.md.description)
+
+            # The result now directly includes a vectorizable_description that's ready to use
+            transcript = result['vectorizable_description']
             TRACKER.update_status(
                 user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.PROCESSING, progress=20
             )
