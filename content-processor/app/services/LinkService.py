@@ -57,12 +57,12 @@ async def get_youtube_video_transcript(video_url: str, md: Metadata[YouTubeSpeci
     except ValueError as ve:
         logging.error(
             f"Invalid YouTube URL or transcript unavailable: {str(ve)}")
-        return None
+        raise ve
 
     except Exception as e:
         logging.error(
             f"Error processing YouTube video in service {video_url}: {str(e)}")
-        return None
+        raise e
 
 
 async def get_web_scraped_data(url: str, md: Metadata[TextSpecificMd]) -> AgentResponse:

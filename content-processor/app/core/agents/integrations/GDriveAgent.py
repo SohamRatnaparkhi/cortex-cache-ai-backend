@@ -3,8 +3,10 @@ import uuid
 from typing import List
 
 from PIL import Image
+from PyPDF2 import PdfReader
 
 from app.core.agents.integrations.IntegrationAgent import IntegrationAgent
+from app.core.agents.MediaAgent import sanitize_input
 from app.core.jina_ai import use_jina
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GDriveFileType, GDriveSpecificMd
@@ -26,7 +28,9 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
             self.md.memId = memId
             TRACKER.create_status(self.md.user_id, memId, self.md.title)
 
+            print(f"Processing Drive file: {file_type}")
             content = ""
+            chunks = []
             if file_type == GDriveFileType.GDOC:
                 content = processor.extract_doc_content()
             elif file_type == GDriveFileType.GSHEET:
@@ -71,12 +75,34 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
                     self.md.description
                 )
                 content = result['vectorizable_description']
+            elif file_type == GDriveFileType.PDF:
+                file_bytes = processor.get_file_content()
+                pdf_reader = PdfReader(io.BytesIO(file_bytes))
+                combine_pages = min(5, len(pdf_reader.pages))
+                text = []
+                chunking_data = []
+
+                for page_no, page in enumerate(pdf_reader.pages, 1):
+                    page_text = sanitize_input(page.extract_text())
+                    text.append(page_text)
+                    chunking_data.append(page_text.replace('\n', ''))
+
+                    if page_no % combine_pages == 0:
+                        chunk = use_jina.segment_data(''.join(chunking_data))
+                        if chunk:
+                            chunks.extend(chunk)
+                        chunking_data.clear()
+
+                if chunking_data:
+                    chunk = use_jina.segment_data(''.join(chunking_data))
+                    chunks.extend(chunk)
             else:
                 raise ValueError(f"Unsupported file type: {file_type}")
 
             # For text-based content (docs, sheets, slides)
-            if content:
-                chunks = use_jina.segment_data(content)
+            if file_type == GDriveFileType.PDF or content:
+                if file_type != GDriveFileType.PDF:
+                    chunks = use_jina.segment_data(content)
                 self.md.memId = memId
                 metadata = []
 

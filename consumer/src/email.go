@@ -92,7 +92,7 @@ func SendErrorEmail(agentError *types.AgentError, user *types.User) error {
                 
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
                     <p style="color: #95a5a6; font-size: 0.9em;">
-                        Please try again later or contact our support team if the issue persists.
+                        Please try again later or reply back to this email if the issue persists.
                     </p>
                 </div>
             </div>

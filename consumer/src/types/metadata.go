@@ -1,8 +1,6 @@
 package types
 
 import (
-	"time"
-
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -12,8 +10,8 @@ type Metadata struct {
 	MemID           string      `json:"mem_id"`
 	Title           string      `json:"title"`
 	Description     string      `json:"description"`
-	CreatedAt       time.Time   `json:"created_at"`
-	LastUpdated     time.Time   `json:"last_updated"`
+	CreatedAt       string      `json:"created_at"`
+	LastUpdated     string      `json:"last_updated"`
 	Tags            []string    `json:"tags"`
 	Source          string      `json:"source"`
 	Language        string      `json:"language"`
