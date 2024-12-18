@@ -1,12 +1,18 @@
+import io
 import uuid
 from typing import List
+
+from PIL import Image
 
 from app.core.agents.integrations.IntegrationAgent import IntegrationAgent
 from app.core.jina_ai import use_jina
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GDriveFileType, GDriveSpecificMd
 from app.services.MemoryService import insert_many_memories_to_db
+from app.utils.AV import (extract_audio_from_video,
+                          process_audio_for_transcription)
 from app.utils.drive_content_extractor import GDriveProcessor
+from app.utils.image import ImageDescriptionGenerator
 from app.utils.status_tracking import TRACKER, ProcessingStatus
 
 
@@ -27,10 +33,44 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
                 content = processor.extract_sheet_content()
             elif file_type == GDriveFileType.GSLIDE:
                 content = processor.extract_slide_content()
-            elif file_type in [GDriveFileType.PDF, GDriveFileType.IMAGE,
-                               GDriveFileType.AUDIO, GDriveFileType.VIDEO]:
-                # Call your existing handlers for these types
-                pass
+            elif file_type == GDriveFileType.VIDEO:
+                file_bytes = processor.get_file_content()
+                TRACKER.update_status(
+                    user_id=self.md.user_id,
+                    document_id=memId,
+                    status=ProcessingStatus.PROCESSING,
+                    progress=15
+                )
+                # Extract audio from video
+                audio_content = await extract_audio_from_video(file_bytes)
+                # Process audio for transcription
+                content, _ = await process_audio_for_transcription(
+                    audio_content=audio_content,
+                    language=self.md.language
+                )
+            elif file_type == GDriveFileType.AUDIO:
+                file_bytes = processor.get_file_content()
+                TRACKER.update_status(
+                    user_id=self.md.user_id,
+                    document_id=memId,
+                    status=ProcessingStatus.PROCESSING,
+                    progress=15
+                )
+                # Process audio directly for transcription
+                content, _ = await process_audio_for_transcription(
+                    audio_content=file_bytes,
+                    language=self.md.language
+                )
+            elif file_type == GDriveFileType.IMAGE:
+                file_bytes = processor.get_file_content()
+                image = Image.open(io.BytesIO(file_bytes))
+                processor = ImageDescriptionGenerator()
+                result = processor.generate_description(
+                    file_bytes,
+                    self.md.title,
+                    self.md.description
+                )
+                content = result['vectorizable_description']
             else:
                 raise ValueError(f"Unsupported file type: {file_type}")
 
@@ -66,9 +106,13 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
                     userId=self.md.user_id,
                     memoryId=memId,
                 )
+            else:
+                TRACKER.update_status(
+                    self.md.user_id, memId, status=ProcessingStatus.FAILED, progress=100)
+                raise ValueError("No content found in the file")
         except Exception as e:
             TRACKER.update_status(
-                self.md.user_id, memId, status=ProcessingStatus.FAILED, error=str(e))
+                self.md.user_id, memId, status=ProcessingStatus.FAILED, progress=100)
             raise RuntimeError(f"Failed to process Drive file: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], preprocessed_chunks: List[str], meta_chunks: List[GDriveSpecificMd], memId: str):

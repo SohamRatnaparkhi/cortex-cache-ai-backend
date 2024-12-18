@@ -1,9 +1,11 @@
+import io
 import os
 from typing import Optional, Tuple
 
 from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 from app.schemas.Metadata import GDriveFileType
 
@@ -116,3 +118,15 @@ class GDriveProcessor:
             slide_number += 1
 
         return '\n\n'.join(content)
+
+    def get_file_content(self) -> bytes:
+        """Download file content from Google Drive"""
+        request = self.service.files().get_media(fileId=self.file_id)
+        file_content = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_content, request)
+
+        done = False
+        while done is False:
+            _, done = downloader.next_chunk()
+
+        return file_content.getvalue()
