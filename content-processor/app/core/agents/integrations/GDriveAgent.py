@@ -8,6 +8,7 @@ from PyPDF2 import PdfReader
 from app.core.agents.integrations.IntegrationAgent import IntegrationAgent
 from app.core.agents.MediaAgent import sanitize_input
 from app.core.jina_ai import use_jina
+from app.prisma import prisma
 from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GDriveFileType, GDriveSpecificMd
 from app.services.MemoryService import insert_many_memories_to_db
@@ -123,6 +124,17 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
                     self.md.user_id, memId, status=ProcessingStatus.STORING_DOCUMENT, progress=85)
                 await self.store_memory_in_database(chunks=chunks, preprocessed_chunks=processed_chunks, meta_chunks=metadata, memId=memId)
 
+                await prisma.prisma.connectedgdrivefiles.update(
+                    where={
+                        "userId_fileId": {
+                            "userId": self.md.user_id,
+                            "fileId": self.resource_link
+                        }
+                    },
+                    data={
+                        "state": "connected",
+                    }
+                )
                 TRACKER.update_status(
                     self.md.user_id, memId, status=ProcessingStatus.COMPLETED, progress=100)
                 return AgentResponse(
