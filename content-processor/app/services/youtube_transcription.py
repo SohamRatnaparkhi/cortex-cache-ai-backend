@@ -94,7 +94,6 @@ class TranscriptChunker:
             video_desc = ""
             author = "Unknown"
             channel_name = "Unknown"
-            print(response)
             if response.status_code == 200:
                 data = response.json()
                 video_title = data.get("title", "Untitled")
@@ -104,7 +103,6 @@ class TranscriptChunker:
 
             # Get transcript
             proxyIp = get_random_proxy(app='yt')
-            print(f"Using proxy: {proxyIp}")
             language_of_available_transcript = {
                 "language": "",
                 "code": ""
@@ -128,8 +126,6 @@ class TranscriptChunker:
 
             # Create chunks
             chunks = self.create_chunks_from_transcript(transcript)
-
-            # print("Number of chunks: ", len(chunks))
 
             if language_of_available_transcript["code"] != "en":
                 for chunk in chunks:

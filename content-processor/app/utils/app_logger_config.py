@@ -24,7 +24,7 @@ class ColoredFormatter(logging.Formatter):
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.ERROR)
 
 # Create console handler with custom formatter
 ch = logging.StreamHandler()

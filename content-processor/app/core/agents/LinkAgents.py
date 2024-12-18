@@ -16,6 +16,7 @@ from app.schemas.Metadata import (GitSpecificMd, Metadata, TextSpecificMd,
                                   YouTubeSpecificMd)
 from app.services.MemoryService import insert_many_memories_to_db
 from app.services.youtube_transcription import TranscriptChunker
+from app.utils.app_logger_config import logger
 from app.utils.chunk_processing import update_chunks
 from app.utils.Link import extract_code_from_repo
 from app.utils.status_tracking import TRACKER, ProcessingStatus
@@ -53,28 +54,17 @@ class LinkAgent(ABC, Generic[T]):
 
     async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
         try:
-            logger.debug("l1 = " + str(len(chunks)))
             title = self.md.title
             description = self.md.description
             preprocessed_chunks = await update_chunks(chunks=chunks, memoryId=self.md.memId, userId=self.md.user_id)
             preprocessed_chunks = [
                 title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
-            # embeddings = use_jina.get_embedding(preprocessed_chunks)
-
-            # embeddings = [e["embedding"]
-            #               for e in embeddings if "embedding" in e.keys()]
             TRACKER.update_status(
-                self.md.user_id, self.md.memId, ProcessingStatus.CREATING_EMBEDDINGS, 25)
+                self.md.user_id, self.md.memId, ProcessingStatus.CREATING_EMBEDDINGS, 85)
             embeddings = voyage_client.get_embeddings(preprocessed_chunks)
-            logger.debug("l2 = " + str(len(embeddings)))
-
-            logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
 
             vectors = get_vectors(metadata, embeddings)
-
-            logger.debug(len(metadata))
-            logger.debug(len(vectors))
 
             batch_size = 100
             pinecone_client = PineconeClient()
@@ -82,6 +72,9 @@ class LinkAgent(ABC, Generic[T]):
             logger.debug(res)
             return
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=self.md.memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(f"Error embedding and storing chunks: {str(e)}")
 
 
@@ -125,8 +118,6 @@ class GitAgent(LinkAgent[GitSpecificMd]):
             for meta in meta_chunks:
                 meta.memId = memId
 
-            print("Total chunks: ", len(chunks))
-
             await self.embed_and_store_chunks(chunks, meta_chunks)
             TRACKER.update_status(
                 self.md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, 85)
@@ -143,8 +134,15 @@ class GitAgent(LinkAgent[GitSpecificMd]):
                 memoryId=memId,
             )
         except ValueError as ve:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise ve
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
+
             raise RuntimeError(f"Error processing Git repository: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], meta_chunks: List[GitSpecificMd], memId: str) -> None:
@@ -171,12 +169,14 @@ class GitAgent(LinkAgent[GitSpecificMd]):
                 await insert_many_memories_to_db(batch)
 
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(
                 f"Error storing Git memory in database: {str(e)}")
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 def format_timestamp(seconds: float) -> str:
@@ -215,7 +215,6 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
             api_url = os.getenv("YOUTUBE_NO_EMBED_API_URL")
             video_url = self.resource_link
             video_id = self.chunker.extract_video_id(video_url)
-            print(f"Video ID: {video_id}")
             # Process video and get chunks with metadata
             extract_start = time.time()
             TRACKER.update_status(
@@ -263,9 +262,7 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 f"Metadata creation took {metadata_end - metadata_start:.2f} seconds")
 
             embed_start = time.time()
-            TRACKER.update_status(
-                self.md.user_id, memId, ProcessingStatus.CREATING_EMBEDDINGS, 25
-            )
+
             await self.embed_and_store_chunks(formatted_chunks, meta_chunks)
             embed_end = time.time()
             logger.info(
@@ -329,6 +326,9 @@ class YoutubeAgent(LinkAgent[YouTubeSpecificMd]):
                 await insert_many_memories_to_db(batch)
 
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(
                 f"Error storing Web memory in database: {str(e)}")
 
@@ -347,24 +347,20 @@ class WebAgent(LinkAgent[TextSpecificMd]):
             memId = str(uuid.uuid4())
             TRACKER.create_status(
                 self.md.user_id, memId, self.md.title)
+            TRACKER.update_status(
+                self.md.user_id, memId, ProcessingStatus.PROCESSING, 20)
             response = await use_jina.web_scraper(link)
-            print(f"Web Scraper Response: {response}")
             if response is not None:
                 content = response.get("data").get("content")
                 title = response.get("data").get("title")
                 description = response.get("data").get("description")
 
-                #  filter all tags from content
                 content = re.sub(r'<[^>]+>', '', content)
                 chunks = use_jina.segment_data(content)
-                # if chunks is not None and "chunks" in chunks.keys():
-                #     chunks = chunks["chunks"]
 
                 self.md.memId = memId
                 self.md.title += " " + title
                 self.md.description += " " + description
-                TRACKER.update_status(
-                    self.md.user_id, memId, ProcessingStatus.PROCESSING, 20)
                 meta_chunks = []
                 for i in range(len(chunks)):
                     tmd = TextSpecificMd(
@@ -417,5 +413,8 @@ class WebAgent(LinkAgent[TextSpecificMd]):
                 await insert_many_memories_to_db(batch)
 
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
             raise RuntimeError(
                 f"Error storing Web memory in database: {str(e)}")

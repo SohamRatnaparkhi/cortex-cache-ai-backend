@@ -167,6 +167,10 @@ class VideoAgent(MediaAgent):
                 await insert_many_memories_to_db(batch)
 
         except Exception as e:
+            TRACKER.update_status(
+                user_id=self.md.user_id, document_id=memId, status=ProcessingStatus.FAILED, progress=100
+            )
+
             raise RuntimeError(
                 f"Error storing video memory in database: {str(e)}")
 

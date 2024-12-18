@@ -26,8 +26,6 @@ class NotionAgent(IntegrationAgent[NotionSpecificMd]):
         TRACKER.update_status(
             md.user_id, memId, ProcessingStatus.CREATING_EMBEDDINGS, progress=25)
 
-        logger.debug(f"Content: {content}")
-
         chunks = use_jina.segment_data(content)
 
         self.md.memId = memId

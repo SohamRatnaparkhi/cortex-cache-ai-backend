@@ -33,6 +33,8 @@ async def process_youtube_link(request: Link.YoutubeLinkRequest) -> AgentRespons
     try:
         transcription = await LinkService.get_youtube_video_transcript(
             request.video_url, request.metadata)
+        print(transcription)
+        print("here")
         return AgentResponseWrapper(
             response=transcription
         )

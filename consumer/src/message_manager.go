@@ -136,8 +136,69 @@ func ProcessMessage(task types.Task, apiKey string, db *sql.DB) (*http.Response,
 		return nil, task, apiKey, err
 	}
 
-	fmt.Println("Response Status:", resp.Status)
-	fmt.Printf("DB: %v\n", db)
+	// fmt.Println("Response Status:", resp.Status)
+	// fmt.Printf("DB: %v\n", db)
+	fmt.Println("Response Status Code:", resp.StatusCode)
+	if resp.StatusCode >= 400 {
+		// if task.Retries < 3 {
+		// 	return resp, task, apiKey, errors.New("retry")
+		// }
+		print(task.Data)
+		var dataMap map[string]interface{}
+		if err := json.Unmarshal(jsonData, &dataMap); err != nil {
+			log.Printf("Failed to unmarshal jsonData: %s", err)
+			return resp, task, apiKey, err
+		}
+
+		// Extract metadata as a map
+		metadataMap, ok := dataMap["metadata"].(map[string]interface{})
+		if !ok {
+			log.Printf("metadata not found or invalid format")
+			return resp, task, apiKey, errors.New("metadata not found or invalid format")
+		}
+
+		// Re-marshal and unmarshal metadata into your struct
+		metadataBytes, err := json.Marshal(metadataMap)
+		if err != nil {
+			log.Printf("Failed to marshal metadata: %s", err)
+			return resp, task, apiKey, err
+		}
+
+		var metadata types.Metadata
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+			log.Printf("Failed to unmarshal metadata into struct: %s", err)
+			return resp, task, apiKey, err
+		}
+
+		// Now access the user_id from your metadata struct
+		if metadata.UserID == "" {
+			log.Printf("user_id not found or empty in metadata")
+			return resp, task, apiKey, errors.New("user_id not found or empty in metadata")
+		}
+
+		// Use metadata.UserID for further processing
+		userId := metadata.UserID
+		user, err := getUserByID(userId, db)
+		if err != nil {
+			log.Printf("Failed to get user: %s", err)
+			return resp, task, apiKey, err
+		}
+
+		if user != nil {
+			var errorResponse types.AgentError
+			if task.Type == "git" {
+				errorResponse = types.AgentError{Error: "Failed to process git repo. Please check the URL and try again."}
+			} else if task.Type == "youtube" {
+				errorResponse = types.AgentError{Error: "Failed to process youtube video. Please check if the subtitles are enabled for this video. If not, you can download the video and upload it as a file or through Google Drive."}
+			} else if task.Type == "web" {
+				errorResponse = types.AgentError{Error: "Failed to process web page. If the web page is restricted and requires login, you can upload the screenshots of the page as an image."}
+			} else if task.Type == "file" {
+				errorResponse = types.AgentError{Error: "Failed to process file. Please check the file and try again."}
+			}
+			return resp, task, apiKey, SendErrorEmail(&errorResponse, user)
+		}
+
+	}
 
 	// Handle the error from handleAPIResponse
 	if err := handleAPIResponse(resp, db); err != nil {
