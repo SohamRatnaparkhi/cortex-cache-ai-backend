@@ -7,7 +7,7 @@ from app.schemas.Common import AgentResponse
 from app.schemas.Metadata import GDriveFileType, GDriveSpecificMd
 from app.services.MemoryService import insert_many_memories_to_db
 from app.utils.drive_content_extractor import GDriveProcessor
-from app.utils.status_tracking import TRACKER
+from app.utils.status_tracking import TRACKER, ProcessingStatus
 
 
 class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
@@ -16,7 +16,6 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
             processor = GDriveProcessor(
                 self.resource_link, self.access_token, self.refresh_token)
             file_type, file_metadata = processor.get_file_type()
-            print(file_type, file_metadata)
             memId = str(uuid.uuid4())
             self.md.memId = memId
             TRACKER.create_status(self.md.user_id, memId, self.md.title)
@@ -34,8 +33,6 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
                 pass
             else:
                 raise ValueError(f"Unsupported file type: {file_type}")
-
-            print(content)
 
             # For text-based content (docs, sheets, slides)
             if content:
@@ -56,8 +53,12 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
 
                 processed_chunks = await self.embed_and_store_chunks(chunks, metadata)
 
+                TRACKER.update_status(
+                    self.md.user_id, memId, status=ProcessingStatus.STORING_DOCUMENT, progress=85)
                 await self.store_memory_in_database(chunks=chunks, preprocessed_chunks=processed_chunks, meta_chunks=metadata, memId=memId)
 
+                TRACKER.update_status(
+                    self.md.user_id, memId, status=ProcessingStatus.COMPLETED, progress=100)
                 return AgentResponse(
                     chunks=chunks,
                     metadata=metadata,
@@ -65,10 +66,9 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
                     userId=self.md.user_id,
                     memoryId=memId,
                 )
-
         except Exception as e:
-            # logger.error(f"Error processing Drive file: {str(e)}")
-            print(f"Error processing Drive file: {str(e)}")
+            TRACKER.update_status(
+                self.md.user_id, memId, status=ProcessingStatus.FAILED, error=str(e))
             raise RuntimeError(f"Failed to process Drive file: {str(e)}")
 
     async def store_memory_in_database(self, chunks: List[str], preprocessed_chunks: List[str], meta_chunks: List[GDriveSpecificMd], memId: str):
@@ -94,5 +94,7 @@ class DriveAgent(IntegrationAgent[GDriveSpecificMd]):
                 await insert_many_memories_to_db(batch, preprocessed_chunks[i:i + batch_size])
 
         except Exception as e:
+            TRACKER.update_status(
+                self.md.user_id, memId, status=ProcessingStatus.FAILED, error=str(e))
             raise RuntimeError(
                 f"Error storing Web memory in database: {str(e)}")
