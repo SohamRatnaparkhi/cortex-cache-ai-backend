@@ -39,7 +39,7 @@ async def get_citations_on_message_id(
     conversation_id: str
 ) -> CitationsResponse:
     """
-    Get both memory and web citations for a message.
+    Get both memory and web citations for a message, maintaining chunk ID order.
 
     Args:
         message_id: Unique identifier for the message
@@ -47,7 +47,7 @@ async def get_citations_on_message_id(
         conversation_id: Conversation identifier
 
     Returns:
-        CitationsResponse containing combined citations and IDs
+        CitationsResponse containing combined citations and IDs ordered by chunk ID sequence
 
     Raises:
         ValueError: If message not found or other errors occur
@@ -58,16 +58,11 @@ async def get_citations_on_message_id(
             where={"id": message_id},
         )
 
-        # print(f"Web citations: {message.WebSearchCitations}")
-        web_citations = await prisma.websearchcitations.find_many(
-            where={"messageId": message_id}
-        )
-
         if not message:
             raise ValueError(f"Message not found: {message_id}")
 
-        # Extract IDs
-        chunk_ids = list(sorted(set(message.chunkIds))
+        # Extract IDs, maintaining order
+        chunk_ids = list(dict.fromkeys(message.chunkIds)
                          ) if message.chunkIds else []
         memory_ids = message.memoryId if message.memoryId else []
 
@@ -76,19 +71,30 @@ async def get_citations_on_message_id(
             where={"chunkId": {"in": chunk_ids}}
         )
 
-        # Format memory citations
-        formatted_memory_citations: List[MemoryCitation] = [
-            {
-                "id": str(memory.memId),
-                "content": memory.memData,
-                "title": memory.title,
-                "memType": memory.memType,
-                "type": "memory",
-                "chunkId": memory.chunkId,
-                "metadata": memory.metadata if hasattr(memory, 'metadata') else {}
-            }
+        web_citations = await prisma.websearchcitations.find_many(
+            where={"messageId": message_id}
+        )
+
+        # Create a mapping of chunkId to memory citation for efficient lookup
+        memory_by_chunk_id = {
+            memory.chunkId: memory
             for memory in memory_citations
-        ]
+        }
+
+        # Format memory citations in the order of chunk_ids
+        formatted_memory_citations: List[MemoryCitation] = []
+        for chunk_id in chunk_ids:
+            if chunk_id in memory_by_chunk_id:
+                memory = memory_by_chunk_id[chunk_id]
+                formatted_memory_citations.append({
+                    "id": str(memory.memId),
+                    "content": memory.memData,
+                    "title": memory.title,
+                    "memType": memory.memType,
+                    "type": "memory",
+                    "chunkId": memory.chunkId,
+                    "metadata": memory.metadata if hasattr(memory, 'metadata') else {}
+                })
 
         # Format web citations
         formatted_web_citations: List[WebCitation] = [
@@ -103,7 +109,7 @@ async def get_citations_on_message_id(
             for citation in (web_citations or [])
         ]
 
-        # Combine all citations
+        # Combine citations - memory citations are already in chunk_id order
         all_citations = formatted_memory_citations + formatted_web_citations
 
         # Update conversation title asynchronously

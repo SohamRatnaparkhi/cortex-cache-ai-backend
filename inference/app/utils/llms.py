@@ -38,7 +38,7 @@ pro_query_llm = ChatOpenAI(
     model_name="gpt-4o-mini",
     max_retries=3,
     timeout=None,
-    temperature=0.7,
+    temperature=0.3,
     max_tokens=1800,
 )
 

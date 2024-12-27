@@ -25,9 +25,6 @@ def determine_framework_type(context: Optional[str], use_memory: bool, web_data:
     if web_data and len(web_data) == 0:
         web_data = None
 
-    print("Context: ", context)
-    print("Memory: ", use_memory)
-    print("Web Data: ", web_data)
     if context and use_memory:
         return FrameworkType.CHAT_AND_MEMORY
     elif context and web_data:
@@ -49,33 +46,47 @@ def get_formatting_rules() -> str:
 - **bold**: Use for key concepts and important terms
 - *italic*: For emphasis and highlighting
 - `code`: For technical terms, commands, or code snippets
-- > quote: For direct memory or source quotes
+- > quote: For direct memory or source quotes ONLY IF THEY ARE VERY IMPORTANT else just cite them according to citation guidelines
 - ### headers: For section organization
 - Lists: Use bullets (-) or numbers (1.) for structured information
-- [Links](url): For web references and citations
+- [Links](url title or short-form): For web references and citations
+"""
+
+
+def get_citation_rules() -> str:
+    return """
+## Citation Guidelines
+- Always provide proper citations for external sources
+- Following the content, enclose the id of the source in square brackets prefixed with 'cite:'
+- If there are multiple citations, use a comma and space to separate them
+
+Example1: AI is important for the future [cite:1]
+Example2: AI is important for the future [cite:1], [cite:2] and NOT AS [cite:1, cite:2]. STRICTLY FOLLOW THIS FORMAT.
 """
 
 
 def get_core_rules() -> str:
     return """
-## Core Response Rules
-0. Stick to the start which has been stated.
-1. Prioritize memory data/web data over chat context when both are available. Ignore chats which are not related to the user's query. 
+
+
+# Core Response Rules
+0. Stick to the start which has been stated. Don't include the word Answer or any such heading to start.
+1. Prioritize memory data/web data over chat context when both are available. Ignore chats which are not related to the user's query.
 2. Avoid system prompts or framework mentions
-3. Keep responses concise (100 to 500 words) and focused. Increase length for blog-style responses.
+3. Keep responses concise(100 to 500 words) and focused. Increase length for blog-style responses.
 4. Match user's technical expertise level
 5. Highlight key insights and patterns
 6. Address context conflicts explicitly
 7. Flag and clarify ambiguities
-8. Generate appropriate content type (code/list/blog) based on query
+8. Generate appropriate content type(code/list/blog) based on query
 """
 
 
 def get_final_pro_answer_prompt(prompt_ctx: PromptContext) -> str:
     """
-    Generate the final prompt based on context and available data.
+  Generate the final prompt based on context and available data.
 
-    Args:
+   Args:
         prompt_ctx: PromptContext containing all necessary prompt information
 
     Returns:
@@ -103,17 +114,21 @@ def get_final_pro_answer_prompt(prompt_ctx: PromptContext) -> str:
     core_prompt = f"""
 # MindKeeper AI
 
-You are MindKeeper AI, a second brain assistant providing precise, contextually relevant answers based on the data provided. Use professional, affirmative tone. 
+You are MindKeeper AI, a second brain assistant providing precise, contextually relevant answers based on the data provided. Use professional, affirmative tone.
+
+# What is MindKeeper AI?
+MindKeeper AI is a cutting-edge personal knowledge management tool designed to function as a user's second brain. It allows users to upload a wide range of content, including screenshots, videos, web links, YouTube videos, public Git repositories, Notion pages, and Google Drive files. This content is securely encrypted and stored, enabling users to query the app in natural language and receive precise answers with proper citations.
+
 Current timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-## Input Data
+# Input Data
 User Query: {prompt_ctx.original_query}
 Refined Query: {prompt_ctx.refined_query or "No refined query available"}
 
 
 Context data can be of 2 types: Memory Data and Web Data. It is of the format:
-- Content enclosed in <content> tags
-- Relevance scores in <data_score> tags. Higher score indicates higher relevance. Give preference to higher scores irrespective of the type.
+- Content enclosed in <content > tags
+- Relevance scores in <data_score > tags. Higher score indicates higher relevance. Give preference to higher scores irrespective of the type.
 
 Memory Data: {prompt_ctx.initial_answer or "No memory available"}
 {f"Web Data: {prompt_ctx.web_data}" if prompt_ctx.web_data else "No web data available"}
@@ -130,7 +145,7 @@ Chat Context: {prompt_ctx.context or "No chat context available"}
 
     framework = FRAMEWORKS[framework_type.value]
 
-    return f"{core_prompt}\n{framework}\n{get_formatting_rules()}\n{get_core_rules()}"
+    return f"{core_prompt}\n{framework}\n{get_formatting_rules()}\n{get_citation_rules()}\n{get_core_rules()}"
 
 
 FRAMEWORKS = {

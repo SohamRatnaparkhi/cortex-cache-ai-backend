@@ -1,79 +1,111 @@
+"""Query Analysis and Refinement Module"""
+
+import re
 from datetime import datetime
+from typing import Literal
 
 
-def generate_query_refinement_prompt(query: str, context: str = "", refined_query: str = '', title: str = '', description: str = '') -> str:
-    context = context if context else ""
-    extra_desc = ""
-    if (title):
-        extra_desc += f"- This query is related to a topic called title: {title}\n"
-    if (description):
-        extra_desc += f"- Description: {description}\n"
-    prompt = f"""
-    # Query Refinement Task
+def detect_code_query(query: str) -> bool:
+    """Detects if a query is likely code-related based on various heuristics."""
 
-You refine user queries for semantic search in a RAG system, prioritizing the latest user query while considering previous queries if relevant.
+    code_indicators = [
+        r'\b(function|def|class|var|const|let|import|from|return|if|else|for|while)\b',
+        r'[{}\[\]();=>]',
+        r'[a-zA-Z_][a-zA-Z0-9_]*\([^\)]*\)',
+        r'[\w_]+\.[a-zA-Z_]\w*',
+        r'\.(py|js|ts|java|cpp|cs|php|rb|go|rs|swift|kt)\b',
+        r'\b(api|sdk|npm|pip|docker|git|aws|azure|kubernetes|k8s)\b',
+        r'```[\s\S]*```',
+        r'`[^`]+`',
+    ]
+    combined_pattern = '|'.join(code_indicators)
+    if re.search(combined_pattern, query, re.IGNORECASE):
+        return True
 
-## Input
-- Current Query: {query}
-- Keywords: {refined_query if refined_query else "N/A"}
-- Chat Context: {context if context else "N/A"}
-{extra_desc}
-{title}
-    - Shows user's previous queries, if available
-    - Indicates user's information-seeking path if it aligns with the current query
+    code_keywords = {
+        'implement', 'debug', 'compile', 'runtime', 'error', 'exception',
+        'function', 'method', 'class', 'object', 'variable', 'array',
+        'database', 'query', 'api', 'endpoint', 'request', 'response',
+        'server', 'client', 'framework', 'library', 'package', 'module'
+    }
+    query_words = set(query.lower().split())
+    return len(query_words.intersection(code_keywords)) >= 2
 
-- If required, consider today's date and time as: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-## Context Analysis
-Focus on the most recent query, unless it's a clear progression from previous queries. If the latest query diverges significantly:
-- Give full priority to the current query
-- Ignore unrelated past context
+def generate_query_refinement_prompt(
+    query: str,
+    mode: Literal["llm_only", "memory_llm", "web_memory_llm"] = "memory_llm",
+    context: str = "",
+    refined_query: str = "",
+    title: str = "",
+    description: str = ""
+) -> str:
+    """Generates a prompt for LLM to refine search queries for vector/semantic search.
 
-Otherwise, when previous queries are related:
-- Identify user's main topics of interest
-- Trace question progression and key terms
-- Understand search patterns
+    Args:
+        query (str): The current user query to be refined
+        mode (Literal): Operating mode - llm_only, memory_llm, or web_memory_llm
+        context (str, optional): Chat history in user-assistant pairs. Defaults to "".
+        refined_query (str, optional): Previous refined query terms. Defaults to "".
+        title (str, optional): Related topic title. Defaults to "".
+        description (str, optional): Additional context description. Defaults to "".
 
-## Query Guidelines
-For short queries (<10 words):
-- Expand using the current query and relevant past context
-- If unrelated, build entirely on the current query
-- Create a 15-25 word natural query that matches the search intent
+    Returns:
+        str: Prompt instructing LLM to generate a refined query optimized for vector search.
+    """
 
-For long queries (≥10 words):
-- Extract core intent from the current query first
-- Only integrate previous queries if they align
-- Focus on refining the main topic and clarifying any ambiguous terms
+    is_code_query = detect_code_query(query)
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-## Output Rules
-- No explanations
-- No bullet points
-- Directly return the refined query with clear user intent
-- Prioritize the current query if unrelated
+    prompt_addition_for_code = """
+3. If code-related:
+   - Preserve exact code related to query at start
+   - Include programming context
+   - Maintain framework/library mentions""" if is_code_query else ""
 
-Remember: Create one clear, search-optimized sentence that builds on user's previous queries and current intent. Don't include any additional context or explanations. Strictly focus on refining the query for semantic search in a RAG system and return it.
-"""
-    return prompt
+    mode_focus = {
+        "llm_only": "Focus only on current query along with context, optimize for direct answers",
+        "memory_llm": "Balance current query with chat history context",
+        "web_memory_llm": "Optimize for web content while maintaining context"
+    }
 
-#     prompt = f"""
-# Given the following user query and context, refine the query to improve its effectiveness for semantic search in a RAG system:
+    prompt = f"""You are a query refinement system. Generate ONE refined search query optimized for vector and semantic search.
 
-# User Query: {query}
-# Query without stop words: {refined_query if refined_query else "No refined query available"}
-# Context: {context if context else "No additional context provided"}
+IMPORTANT: Return ONLY the refined query. No explanations, no metadata, no additional text. 
+Current time: {current_time}
 
-# Your task:
-# 1. Analyze the main concepts and intent of the query.
-# 2. If the original query is short (less than 10 words):
-#    - Expand it into a more detailed question or statement that captures the user's intent.
-#    - Incorporate relevant context if available.
-#    - Aim for a refined query of 15-25 words.
-# 3. If the original query is long (10 words or more):
-#    - Summarize it to capture the core intent and key concepts.
-#    - Remove any redundant or less important information.
-#    - Aim for a refined query of 10-20 words.
-# 4. Ensure the refined query is a natural language phrase or sentence, not a list of keywords.
-# 5. The refined query should maintain the original intent while being optimized for semantic search.
+Example:
+Input Query: "How do I add authentication to FastAPI?"
+Chat Context: "Previously discussed FastAPI routing and middleware setup"
+Refined Query: "authentication FastAPI"
+Title: None
+Description: None
 
-# Provide the refined query as a single, clear sentence suitable for semantic search in a RAG system. Do not use bullet points or numbered lists in your response.
-# """
+BAD Response: "Here's a refined query: FastAPI authentication implementation guide"
+GOOD Response: FastAPI authentication implementation OAuth2 JWT security middleware integration best practices
+
+Input Query: {query}
+Mode: {mode}
+Previous Query Terms: {refined_query if refined_query else "None"}
+Title: {title if title else "None"}
+Description: {description if description else "None"}
+
+Chat Context:
+{context if context else "No previous context"}
+
+Instructions:
+1. Create ONE search query that:
+   - Captures the core intent of the current query
+   - Incorporates relevant context from chat history
+   - Uses precise technical terms from discussion
+   - Is optimized for vector similarity search
+   - Contains 15-40 words depending on complexity
+
+2. Mode-specific focus:
+   - {mode_focus[mode]}
+
+{prompt_addition_for_code}
+
+REMEMBER: Like the GOOD example above, output ONLY the refined query without any other text."""
+
+    return prompt.strip()

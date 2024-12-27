@@ -20,8 +20,10 @@ from app.utils.llms import get_answer_llm
 from app.utils.Preprocessor import improve_query, preprocess_query
 from app.utils.prompts.final_ans import prompt as final_ans_prompt
 from app.utils.prompts.frameworks import NO_MEMORY_PROMPT
-from app.utils.prompts.Pro_final_ans import (get_final_pro_answer,
-                                             get_final_pro_answer_prompt)
+from app.utils.prompts.Pro_final_ans import (get_core_rules,
+                                             get_final_pro_answer,
+                                             get_final_pro_answer_prompt,
+                                             get_formatting_rules)
 from app.utils.prompts.query import generate_query_refinement_prompt
 from app.utils.web_formatter import ContentLimits, WebDataFormatter
 from app.utils.web_results_fetcher import get_web_results
@@ -97,18 +99,14 @@ async def handle_query_response(
             )
 
         if query.use_web:
-            # get web results based on query and agents selected using multi-threading
             web_results = await get_web_results(llm_query, query.web_sources)
-            # TODO: get necessary prompts to pass to get final prompt function
-            # get citations to pass to inset_message_in_db
-            pass
 
         reranked_results = await voyage_client.unified_rerank(
             k=15,
             memory_data=memory_results,
             query=llm_query,
             web_data=web_results,
-            memory_threshold=0.4,
+            memory_threshold=0.5,
             web_threshold=0.3
         )
 
@@ -118,9 +116,6 @@ async def handle_query_response(
         memory_based_reranking = reranked_results[0]
         web_based_reranking = reranked_results[1]
 
-        # logger.info(f"Web based reranking: {web_based_reranking}")
-
-        #  make web citations
         web_citations = []
 
         if web_based_reranking:
@@ -151,7 +146,7 @@ async def handle_query_response(
                     content=query.query,
                     web_citations=web_citations
                 )
-                return handle_response_without_memory(query, llm_query, message.id, is_stream)
+                return handle_response_without_memory(query, llm_query, message.id, is_stream, context)
 
         memory_data = format_memory_xml(llm_query, memory_results)
 
@@ -174,7 +169,7 @@ async def handle_query_response(
                 web_citations.extend(citations)
                 if web_data == "":
                     web_data = "No web results found."
-        # print(web_citations)
+
         message = await insert_message_in_db(
             query_id=query.query_id,
             chunk_ids=chunk_ids,
@@ -221,18 +216,18 @@ async def handle_query_response(
 def format_memory_xml(query: str, results: List[Results]) -> str:
     """Format memory results in XML format."""
     data_entries = [
-        f"<data>\n\t<content>{res.mem_data}</content>\n\t<data_score>{res.score}</data_score>\n</data>\n"
-        for res in results
+        f"<data>\n\t<content>{res.mem_data}</content>\n\t<data_score>{res.score}</data_score>\n\t<id>{i+1}</id>\n</data>"
+        for i, res in enumerate(results)
     ]
     return f"<question>{query}</question>\n{''.join(data_entries)}"
 
 
-def handle_response_without_memory(query: QueryRequest, llm_query: str, message_id: str, is_stream: bool) -> Dict:
+def handle_response_without_memory(query: QueryRequest, llm_query: str, message_id: str, is_stream: bool, context: str) -> Dict:
     """Handle response when memory is not used."""
     return {
         "curr_ans": "",
         "query": llm_query,
-        "prompt": f"User query: {llm_query}\n\n" + NO_MEMORY_PROMPT,
+        "prompt": f"User query: {query.query}\nRefined query: {llm_query}\nContext: {context}" + NO_MEMORY_PROMPT + get_core_rules() + get_formatting_rules(),
         "messageId": message_id
     } if is_stream else {
         "query": llm_query,
@@ -380,6 +375,8 @@ async def get_chat_context(
             order={"createdAt": "desc"}
         )
 
+        # print(f'Messages: {messages}')
+
         if not messages:
             return ChatContext(context="", query_context="", has_conversation=False)
 
@@ -416,10 +413,10 @@ async def get_chat_context(
             for ctx in context_map.values()
         )
 
+        # print(full_context)
+
         if is_pro:
             full_context = await improve_context_for_pro_users(full_context)
-
-        print(full_context)
 
         return ChatContext(
             context=full_context,
