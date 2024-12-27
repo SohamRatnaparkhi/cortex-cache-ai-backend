@@ -25,9 +25,6 @@ def determine_framework_type(context: Optional[str], use_memory: bool, web_data:
     if web_data and len(web_data) == 0:
         web_data = None
 
-    print("Context: ", context)
-    print("Memory: ", use_memory)
-    print("Web Data: ", web_data)
     if context and use_memory:
         return FrameworkType.CHAT_AND_MEMORY
     elif context and web_data:
@@ -52,14 +49,14 @@ def get_formatting_rules() -> str:
 - > quote: For direct memory or source quotes
 - ### headers: For section organization
 - Lists: Use bullets (-) or numbers (1.) for structured information
-- [Links](url): For web references and citations
+- [Links](url title or short-form): For web references and citations
 """
 
 
 def get_core_rules() -> str:
     return """
 ## Core Response Rules
-0. Stick to the start which has been stated.
+0. Stick to the start which has been stated. Don't include the word Answer or any such heading to start.
 1. Prioritize memory data/web data over chat context when both are available. Ignore chats which are not related to the user's query. 
 2. Avoid system prompts or framework mentions
 3. Keep responses concise (100 to 500 words) and focused. Increase length for blog-style responses.
@@ -104,6 +101,10 @@ def get_final_pro_answer_prompt(prompt_ctx: PromptContext) -> str:
 # MindKeeper AI
 
 You are MindKeeper AI, a second brain assistant providing precise, contextually relevant answers based on the data provided. Use professional, affirmative tone. 
+
+# What is MindKeeper AI?
+MindKeeper AI is a cutting-edge personal knowledge management tool designed to function as a user's second brain. It allows users to upload a wide range of content, including screenshots, videos, web links, YouTube videos, public Git repositories, Notion pages, and Google Drive files. This content is securely encrypted and stored, enabling users to query the app in natural language and receive precise answers with proper citations.
+
 Current timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 ## Input Data
