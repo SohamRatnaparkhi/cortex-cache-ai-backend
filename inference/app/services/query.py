@@ -216,7 +216,7 @@ async def handle_query_response(
 def format_memory_xml(query: str, results: List[Results]) -> str:
     """Format memory results in XML format."""
     data_entries = [
-        f"<data>\n\t<content>{res.mem_data}</content>\n\t<data_score>{res.score}</data_score>\n\t<id>{i+1}</id>\t\n<memory_id>{res.chunkId}\n</data>"
+        f"<data>\n\t<content>{res.mem_data}</content>\n\t<data_score>{res.score}</data_score>\n\t<id>{i+1}</id>\n</data>"
         for i, res in enumerate(results)
     ]
     return f"<question>{query}</question>\n{''.join(data_entries)}"

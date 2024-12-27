@@ -61,7 +61,7 @@ def get_citation_rules() -> str:
 - If there are multiple citations, use a comma and space to separate them
 
 Example1: AI is important for the future [cite:1]
-Example2: AI is important for the future [cite:1], [cite:2]
+Example2: AI is important for the future [cite:1], [cite:2] and NOT AS [cite:1, cite:2]. STRICTLY FOLLOW THIS FORMAT.
 """
 
 
