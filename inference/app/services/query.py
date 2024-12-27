@@ -216,8 +216,8 @@ async def handle_query_response(
 def format_memory_xml(query: str, results: List[Results]) -> str:
     """Format memory results in XML format."""
     data_entries = [
-        f"<data>\n\t<content>{res.mem_data}</content>\n\t<data_score>{res.score}</data_score>\n</data>\n"
-        for res in results
+        f"<data>\n\t<content>{res.mem_data}</content>\n\t<data_score>{res.score}</data_score>\n\t<id>{i+1}</id>\t\n<memory_id>{res.chunkId}\n</data>"
+        for i, res in enumerate(results)
     ]
     return f"<question>{query}</question>\n{''.join(data_entries)}"
 
@@ -375,6 +375,8 @@ async def get_chat_context(
             order={"createdAt": "desc"}
         )
 
+        # print(f'Messages: {messages}')
+
         if not messages:
             return ChatContext(context="", query_context="", has_conversation=False)
 
@@ -410,6 +412,8 @@ async def get_chat_context(
             f"User: {ctx.user}\nAI: {ctx.ai or ''}"
             for ctx in context_map.values()
         )
+
+        # print(full_context)
 
         if is_pro:
             full_context = await improve_context_for_pro_users(full_context)

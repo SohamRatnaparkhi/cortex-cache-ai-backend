@@ -227,6 +227,10 @@ async def unified_rerank(
             logger.error(f"Error processing reranking results: {e}")
             return memory_results, web_results
 
+        # sort results based on score
+        memory_results.sort(key=lambda x: x.score, reverse=True)
+        web_results.sort(key=lambda x: x.score, reverse=True)
+
         return memory_results, web_results
 
     except Exception as e:
