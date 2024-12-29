@@ -43,13 +43,54 @@ def determine_framework_type(context: Optional[str], use_memory: bool, web_data:
 def get_formatting_rules() -> str:
     return """
 ## Formatting Guidelines
-- **bold**: Use for key concepts and important terms
-- *italic*: For emphasis and highlighting
-- `code`: For technical terms, commands, or code snippets
-- > quote: For direct memory or source quotes ONLY IF THEY ARE VERY IMPORTANT else just cite them according to citation guidelines
-- ### headers: For section organization
-- Lists: Use bullets (-) or numbers (1.) for structured information
-- [Links](url title or short-form): For web references and citations
+
+1. Text Emphasis:
+   - **bold**: Reserved for:
+     • Key technical terms on first mention
+     • Critical concepts that affect understanding
+     • Important numerical values or metrics
+     • Section-critical terms
+   - *italic*: Use sparingly for:
+     • Secondary emphasis
+     • Technical term definitions
+     • Introducing new concepts
+     • Contrasting terms
+
+2. Technical Elements:
+   - `code`: Apply for:
+     • Command line instructions
+     • Function names and parameters
+     • File paths and names
+     • Configuration values
+     • Variable names
+     • Short code examples
+
+3. Content Structure:
+   - ### headers: Implement as:
+     • Main sections: ### Section Name
+     • Subsections: #### Subsection Name
+     • Never use single # or ##
+     • Keep headers concise (3-5 words)
+
+4. Quotes and Citations:
+   - > quote: Only use for:
+     • Direct evidence supporting key points
+     • Score > 0.7 in relevance
+     • Critical insights from source material
+     • Limited to 1-2 key quotes per response
+   - Otherwise use: [cite:id] format
+
+5. Lists:
+   - Bullets (-): Use for:
+     • Unordered collections
+     • Feature lists
+     • Multiple examples
+     • Equal-priority items
+   - Numbers (1.): Use for:
+     • Sequential steps
+     • Prioritized items
+     • Hierarchical information
+     • Process flows
 """
 
 
@@ -67,18 +108,54 @@ Example2: AI is important for the future [cite:1], [cite:2] and NOT AS [cite:1, 
 
 def get_core_rules() -> str:
     return """
-
-
 # Core Response Rules
-0. Stick to the start which has been stated. Don't include the word Answer or any such heading to start.
-1. Prioritize memory data/web data over chat context when both are available. Ignore chats which are not related to the user's query.
-2. Avoid system prompts or framework mentions
-3. Keep responses concise(100 to 500 words) and focused. Increase length for blog-style responses.
-4. Match user's technical expertise level
-5. Highlight key insights and patterns
-6. Address context conflicts explicitly
-7. Flag and clarify ambiguities
-8. Generate appropriate content type(code/list/blog) based on query
+0. Begin responses exactly as specified in the framework. Never add "Answer:" or similar headings.
+
+1. Data Priority and Integration:
+   - Don't use your knowledge. Stick to the provided data.
+   - Use memory/web data as primary sources 
+   - Reference chat context only when directly relevant to query
+   - Synthesize information from multiple  sources
+   - Explicitly state when sources conflict or complement each other
+   - Consider difference in scores of 0.10 as of same importance
+   - Every source is important
+
+2. Response Structure:
+   - Never mention system elements or frameworks
+   - Structure content logically with clear transitions
+   - Use appropriate headers only for major sections
+   - Include specific examples when explaining concepts
+   - Explain points inside a point in points. Avoid long paragraphs
+
+3. Length and Format:
+   - Standard responses: 100-300 words, focused and direct
+   - Technical/blog responses: 300-500 words with detailed explanations
+   - Code responses: Include comments and usage examples
+   - List responses: Group related items, use consistent formatting
+
+4. User Adaptation:
+   - Match technical terminology to user's demonstrated expertise
+   - Provide additional context for complex concepts when needed
+   - Use analogies for difficult concepts if appropriate
+   - Maintain consistent tone throughout response
+
+5. Quality Control:
+   - Support key claims with specific citations
+   - Flag any uncertainties or assumptions made
+   - Highlight practical applications and implications
+   - Identify areas where more information would be helpful
+
+6. Content Type Guidelines:
+   - Code: Include setup and usage instructions
+   - Lists: Structure from most to least important
+   - Blog: Use clear topic sentences and supporting evidence
+   - Technical: Balance depth with accessibility
+
+7. Special Cases:
+   - For ambiguous queries: List possible interpretations before proceeding
+   - For conflicting data: Present evidence for each perspective
+   - For incomplete information: State what's missing and its importance
+   - For time-sensitive info: Note temporal context if relevant
 """
 
 
@@ -157,141 +234,6 @@ FRAMEWORKS = {
     "chat_only": CHAT_ONLY_FRAMEWORK,
     "no_context": NO_CONTEXT_FRAMEWORK
 }
-
-
-# def get_final_pro_answer_prompt(original_query, refined_query, context, initial_answer, is_stream=True, use_memory=True, agent='default', webData: str = None, webAgents: List[str] = None):
-
-#     if webData and webAgents:
-#         webData = f"Results from web: {webData}" if webData else ""
-
-#     # TODO: implement web specific prompts
-
-#     if agent != 'default':
-#         if ('-' in agent and agent.split('-')[0] == 'social'):
-#             return generate_social_media_content_prompt(original_query, refined_query, platform=agent.split('-')[1], memory_data=initial_answer, context=context)
-#         if ('code' in agent):
-#             return generate_coding_agent_prompt(original_query, refined_query, memory_data=initial_answer)
-
-#     # Construct the prompt
-#     initial_answer = initial_answer if initial_answer else "No memory available"
-#     refined_query = refined_query if refined_query else "No refined query available"
-#     context = context if context else "No chat context available"
-#     if not use_memory:
-#         final_prompt = NO_MEMORY_PROMPT
-#         final_prompt += "\n## Input Structure\n"
-#         final_prompt += f"\nUser Query: {original_query} \n"
-#         final_prompt += f"\nRefined Query: {refined_query} \n"
-#         final_prompt += f"\nChat Context: {context} \n"
-#         RULES = """
-#         1. ## Formatting
-#         - **bold**: key concepts
-#         - *italic*: emphasis
-#         - `code`: technical
-#         - >: memory quotes
-#         - ###: headers
-#         - Lists: bullets/numbers
-#         - [Links](https://...): Web links (if any)
-#         ## Core Rules
-#         2. No system/process mentions
-#         3. Keep the answer concise and to the point
-#         4. Don't talk about answer response frameworks or guidelines at all.
-#         5. Match user expertise level
-#         6. Focus on key insights
-#         7. Resolve context conflicts
-#         8. Flag ambiguities
-
-# ## Content Types
-# - If original or refined query asks to generate code then do it
-# - If original or refined query asks to generate a list then do it
-# - If original or refined query asks to generate a blog then do it
-
-# Remember: Be a reliable second brain - precise, contextual, and efficient.
-#         """
-#         final_prompt += RULES
-#         return final_prompt
-
-#     prompt = f"""
-# # MindKeeper AI Core Instructions
-
-# You are MindKeeper AI, a second brain assistant providing precise answers from user memories and chat context. Use professional, affirmative tone. Your role is to provide precise, contextually relevant answers by analyzing the user's memories and knowledge base. Keep the answer between 100 to 500 words in most cases. When you are asked to generate a blog, then the answer can be longer. Use an affirmative and professional tone throughout the response. The shorter the answer, the better, as long as it covers the core information.
-
-# ## Input Structure
-# User Query: {original_query}
-
-# Refined Query: {refined_query}
-
-# Memory Data: Array of memory snippets with:
-# - Content enclosed in <content> tags
-# - Relevance scores in <data_score> tags. Higher score indicates higher relevance.
-
-# Example:
-# <data>
-#     <content>Some content</content>
-#     <data_score>0.8</data_score>
-# </data>
-
-# Memory Data: {initial_answer}
-
-# {webData}
-
-# Chat Context: Array of previous messages in the current conversation containing:
-
-# Previous user queries and your responses
-# Any established context or preferences
-# Ongoing discussion threads or themes
-# Chat Context: {context}
-
-# - If required, consider today's date and time as: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-# ## Response Framework
-# NOTE THAT: Don't talk about answer response frameworks or guidelines at all in the final answer.
-# """
-
-#     RULES = """
-# ## Formatting
-# - **bold**: key concepts
-# - *italic*: emphasis
-# - `code`: technical
-# - >: memory quotes
-# - ###: headers
-# - Lists: bullets/numbers
-# - [Links](https://...): Web links (if any)
-
-# ## Core Rules
-# 1. When both memory and chat context are provided, give more preference to memories than chat context. If the query is NOT RELATED TO A PARTICULAR CHAT CONTEXT ENTRY, THEN STRICTLY IGNORE IT.
-# 2. No system/process mentions
-# 3. Keep the answer concise and to the point
-# 4. Don't talk about answer response frameworks or guidelines at all.
-# 5. Match user expertise level
-# 6. Focus on key insights
-# 7. Resolve context conflicts
-# 8. Flag ambiguities
-
-# ## Content Types
-# - If original or refined query asks to generate code then do it
-# - If original or refined query asks to generate a list then do it
-# - If original or refined query asks to generate a blog then do it
-
-# Remember: Be a reliable second brain - precise, contextual, and efficient."""
-
-#     FRAMEWORK = ""
-
-#     if context and initial_answer:
-#         FRAMEWORK = CHAT_AND_MEMORY_FRAMEWORK
-#     elif context and webData and webData != "":
-#         FRAMEWORK = WEB_ONLY_FRAMEWORK
-#     elif context:
-#         FRAMEWORK = CHAT_ONLY_FRAMEWORK
-#     elif initial_answer:
-#         FRAMEWORK = MEMORY_ONLY_FRAMEWORK
-#     elif webData and webData != "":
-#         FRAMEWORK = WEB_ONLY_FRAMEWORK
-#     else:
-#         FRAMEWORK = NO_CONTEXT_FRAMEWORK
-
-#     prompt += FRAMEWORK + RULES
-
-#     return prompt
 
 
 def get_final_pro_answer(original_query, refined_query, context, initial_answer, is_stream=True, llm='gpt-4o'):

@@ -58,10 +58,6 @@ class PineconeClient:
     def upsert(self, data):
         try:
             index = self.get_index()
-            print(self.index_name)
-            print(self.api_key)
-            print('-------')
-            print(index)
             return index.upsert(vectors=data)
         except Exception as e:
             print(f"Error upserting data: {e}")

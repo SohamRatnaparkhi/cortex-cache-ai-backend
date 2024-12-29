@@ -106,7 +106,7 @@ async def handle_query_response(
             memory_data=memory_results,
             query=llm_query,
             web_data=web_results,
-            memory_threshold=0.5,
+            memory_threshold=0.4,
             web_threshold=0.3
         )
 
@@ -253,12 +253,10 @@ async def get_results_based_on_perplexity_agent(query: str, agent: str):
 
 
 def format_pxity_results_to_xml(results: list[dict], query: str, agent='web') -> Tuple[str, List[dict]]:
-    print(results)
     xml_content = ''
     score = 0.85
     citations = []
     for result in results["results"]:
-        print(result.keys())
         content = result["content"] or ""
         citation = result["citation_url"] or ""
         citations.append({
@@ -438,7 +436,7 @@ def cap_large_response_to_word_limit(response: str, limit: int = 200) -> str:
 
 async def improve_context_for_pro_users(context: str):
     prompt = f"""
-You are a context preservation specialist. Create a structured summary that maintains the clear dialogue flow between User and AI, while ensuring references are clear and explicit.
+You are a context preservation specialist. Create a structured summary that maintains the clear dialogue flow between User and AI, while ensuring references are clear and explicit. If any part of the context is not related to query then dont include it in the summary or final result.
 
 Guidelines:
 - Each interaction must start with either "User:" or "AI:"
