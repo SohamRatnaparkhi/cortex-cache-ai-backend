@@ -69,7 +69,7 @@ def generate_query_refinement_prompt(
         "web_memory_llm": "Optimize for web content while maintaining context"
     }
 
-    prompt = f"""You are a query refinement system. Generate ONE refined search query optimized for vector and semantic search.
+    prompt = f"""You are a query refinement system. Generate ONE refined search query optimized for vector and semantic search. Refine the quey based on the input query and chat context. If there is no relation between chat context and query, focus only on the query.
 
 IMPORTANT: Return ONLY the refined query. No explanations, no metadata, no additional text. 
 Current time: {current_time}

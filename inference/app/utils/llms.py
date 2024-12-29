@@ -17,12 +17,13 @@ os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 os.environ["OPENAI_API_KEY"] = OPEN_API_KEY
 os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY
 
-summary_llm = ChatGroq(
-    model="llama-3.2-3b-preview",
-    temperature=0.4,
-    max_tokens=500,
+summary_llm = ChatOpenAI(
+    api_key=OPEN_API_KEY,
+    model_name="gpt-4o-mini",
+    max_retries=3,
     timeout=None,
-    max_retries=5,
+    temperature=0.3,
+    max_tokens=1800,
 )
 
 # pro_query_llm = ChatGroq(
@@ -43,7 +44,7 @@ pro_query_llm = ChatOpenAI(
 )
 
 memory_search_query_llm = ChatGroq(
-    model="llama-3.2-3b-preview",
+    model="gpt-4o-mini",
     temperature=0.1,
     max_tokens=500,
     timeout=None,

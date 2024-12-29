@@ -1,137 +1,134 @@
 CHAT_AND_MEMORY_FRAMEWORK = """
 Start: "Based on our discussion and your saved memories"
-```
-# Answer
-[Concise response integrating chat and memories]
 
-# Evidence & Context
-> [Key memory quotes]
-[Chat context integration]
+# Answer
+[Focused answer integrating chat and memory data - max 300 words, emphasize key points]
+
+# Supporting Evidence
+> [Most relevant memory quote (score > 0.7)] [cite:id]
+[How chat context connects to memory]
+[Integration of chat insights with memory data]
 
 # Key Insights
-- [Main findings]
-- [Patterns/Connections]
+- [Main pattern/finding connecting chat and memory]
+- [Critical insight from integration]
+- [Practical application or implication]
 
-# Follow-Up
-1. [Contextual question]
-2. [Exploration suggestion]
-
-```
-    """
+# Next Steps
+1. [Most relevant follow-up question]
+2. [Suggested area for deeper exploration]
+"""
 
 CHAT_AND_WEB_FRAMEWORK = """
 Start: "Based on our discussion and the information from the web"
-```
-# Answer
-[Concise response integrating chat and web data]
 
-# Evidence & Context
-> [Key web source]
-[Chat context integration]
+# Answer
+[Focused answer combining chat and web data - max 300 words]
+
+# Supporting Evidence
+> [Key web finding with highest relevance] [cite:id]
+[Relevant chat context integration]
+[How sources complement each other]
 
 # Key Insights
-- [Main findings]
-- [Patterns/Connections]
+- [Primary finding from combined sources]
+- [Important pattern or trend]
+- [Practical implications]
 
-# Follow-Up
-1. [Contextual question]
-2. [Exploration suggestion]
-
-```
-    """
+# Next Steps
+1. [Specific action or question]
+2. [Area needing exploration]
+"""
 
 MEMORY_AND_WEB_FRAMEWORK = """
 Start: "Based on your saved memories and the information from the web"
-```
-# Answer
-[Concise response integrating memories and web data]
 
-# Evidence & Context
-> [Key memory quotes]
-> [Key web source]
-[Context/Analysis]
+# Answer
+[Concise answer synthesizing memory and web data - max 300 words]
+
+# Supporting Evidence
+> [Key memory evidence] [cite:id]
+> [Supporting web data] [cite:id]
+[Analysis of how sources align or differ]
 
 # Key Insights
-- [Main findings]
-- [Patterns/Connections]
+- [Main finding from integration]
+- [Critical pattern or connection]
+- [Notable implications]
 
-# Follow-Up
-1. [Contextual question]
-2. [Exploration suggestion]
-
-```
-    """
+# Next Steps
+1. [Follow-up based on strongest evidence]
+2. [Suggested area for further research]
+"""
 
 MEMORY_ONLY_FRAMEWORK = """
 Start: "Based on your saved memories"
-```
+
 # Answer
-[Memory-based response]
+[Clear answer from memory data - max 250 words]
 
 # Evidence
-> [Memory quotes]
-[Context/Analysis]
+> [Key memory quote] [cite:id]
+[Context and analysis of memory data]
 
 # Key Points
-- [Main insights]
-- [Patterns found]
+- [Primary insight]
+- [Important pattern]
+- [Practical application]
 
-# Follow-Up
-1. [Contextual question]
-2. [Exploration suggestion]
-```
+# Next Steps
+1. [Relevant follow-up]
+2. [Suggested exploration]
 """
 
 WEB_ONLY_FRAMEWORK = """
 Start: "Based on the information from the web"
-```
+
 # Answer
-[Web-based response]
+[Web-data based answer - max 250 words]
 
 # Evidence
-> [Web source]
-[Context/Analysis]
+> [Key web findings] [cite:id]
+[Analysis and context]
 
 # Key Points
-- [Main insights]
-- [Patterns found]
+- [Main insight]
+- [Critical pattern]
+- [Practical implication]
 
-# Follow-Up
-1. [Contextual question]
-2. [Exploration suggestion]
-```
+# Next Steps
+1. [Follow-up question]
+2. [Area for deeper research]
 """
 
 CHAT_ONLY_FRAMEWORK = """
-# B. Chat Context Only
 Start: "Following our discussion"
-```
+
 # Answer
-[Response building on conversation]
+[Chat-context based answer - max 200 words]
 
 # Context
-[Reference relevant exchanges]
+[Key points from discussion]
+[Relevant connections]
 
 # Memory Tip
 Consider saving:
-1. [Key point]
-2. [Important insight]
-```
+1. [Important insight]
+2. [Valuable finding]
 """
 
 NO_CONTEXT_FRAMEWORK = """
 Start: "I don't have any saved memories about this yet..."
-```
+
 # Answer
-[Knowledge-based response]
+[Knowledge-based answer - max 200 words]
 
 # Enhance Your Second Brain
-Save content like:
-1. [Suggestion 1]
-2. [Suggestion 2]
+Consider saving:
+1. [Specific content suggestion]
+2. [Related resource]
 
 💡 Save this answer if useful!
-```
 """
 
 NO_MEMORY_PROMPT = """

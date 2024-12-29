@@ -35,13 +35,11 @@ async def get_memories(request: Request):
         print(userId)
         memories = await get_all_memories_by_user_id(userId)
         print("Memories")
-        print(memories)
         return {
             "body": memories,
             "status": 200
         }
     except Exception as e:
-        print(e)
         return {
             "error": "Invalid JWT token",
             "status": 400

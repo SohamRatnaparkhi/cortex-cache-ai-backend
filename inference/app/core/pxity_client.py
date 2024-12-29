@@ -34,7 +34,6 @@ class BaseAgent:
                     "content": text.strip(),
                     "citation_url": citations[citation_idx]
                 })
-        print(results)
         return {"results": results}
 
 

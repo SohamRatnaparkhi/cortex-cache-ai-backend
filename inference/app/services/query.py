@@ -45,7 +45,8 @@ async def process_user_query(query: QueryRequest, is_stream: bool = False) -> Di
         query.conversation_id,
         query.query_id,
         limit=5 if query.is_pro else 2,
-        is_pro=query.is_pro
+        is_pro=query.is_pro,
+        query=query.query
     )
 
     context = chat_context.context
@@ -106,7 +107,7 @@ async def handle_query_response(
             memory_data=memory_results,
             query=llm_query,
             web_data=web_results,
-            memory_threshold=0.5,
+            memory_threshold=0.4,
             web_threshold=0.3
         )
 
@@ -253,12 +254,10 @@ async def get_results_based_on_perplexity_agent(query: str, agent: str):
 
 
 def format_pxity_results_to_xml(results: list[dict], query: str, agent='web') -> Tuple[str, List[dict]]:
-    print(results)
     xml_content = ''
     score = 0.85
     citations = []
     for result in results["results"]:
-        print(result.keys())
         content = result["content"] or ""
         citation = result["citation_url"] or ""
         citations.append({
@@ -359,7 +358,8 @@ async def get_chat_context(
     conversation_id: str,
     query_id: Optional[str] = None,
     limit: int = 2,
-    is_pro: bool = False
+    is_pro: bool = False,
+    query: Optional[str] = None
 ) -> ChatContext:
     """
     Retrieve and format chat context from previous messages.
@@ -416,7 +416,7 @@ async def get_chat_context(
         # print(full_context)
 
         if is_pro:
-            full_context = await improve_context_for_pro_users(full_context)
+            full_context = await improve_context_for_pro_users(full_context, query)
 
         return ChatContext(
             context=full_context,
@@ -436,9 +436,9 @@ def cap_large_response_to_word_limit(response: str, limit: int = 200) -> str:
     return response
 
 
-async def improve_context_for_pro_users(context: str):
+async def improve_context_for_pro_users(context: str, query: str):
     prompt = f"""
-You are a context preservation specialist. Create a structured summary that maintains the clear dialogue flow between User and AI, while ensuring references are clear and explicit.
+You are a context preservation specialist. Create a structured summary that maintains the clear dialogue flow between User and AI, while ensuring references are clear and explicit. If any part of the context is not related to query then don't include it in the summary or final result.
 
 Guidelines:
 - Each interaction must start with either "User:" or "AI:"
@@ -454,9 +454,11 @@ Present the summary in this format:
 User: [condensed but precise version of user's question/statement, with all references made explicit]
 AI: [core elements of AI's response, maintaining key technical terms and specific details]
 
+Query: {query}
 Conversation to analyze:
 {context}
 """
+    # print(context)
     model = llms.gemini_model
     response = await model.generate_content_async(
         prompt,
