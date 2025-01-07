@@ -43,6 +43,10 @@ class TextSpecificMd(BaseModel):
     url: str
 
 
+class NoteSpecificMd(BaseModel):
+    chunk_id: str
+
+
 class NotionSpecificMd(BaseModel):
     chunk_id: str
     page_id: str
