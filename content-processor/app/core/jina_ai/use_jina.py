@@ -87,7 +87,7 @@ async def web_scraper(link: str, max_retries: int = 10, retry_delay: float = 1.0
         try:
             response = await jina_web_scraper_client.get()
             if response is not None and response.get("data") is not None:
-                print(f"Web Scraper Response: {response}")
+                # print(f"Web Scraper Response: {response}")
                 return response
 
             # If we didn't get valid data, wait before retrying

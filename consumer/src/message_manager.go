@@ -29,6 +29,7 @@ var ENDPOINT_MAP = map[string]string{
 	"audio":   BASE + "/file/process/audio",
 	"video":   BASE + "/file/process/video",
 	"image":   BASE + "/file/process/image",
+	"note":    BASE + "/text/process/note",
 }
 
 var FAST_API_SERVER = ""
