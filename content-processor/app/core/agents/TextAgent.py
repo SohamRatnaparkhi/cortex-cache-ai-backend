@@ -98,6 +98,13 @@ class TextAgent:
             # Store in database
             await self.store_memory_in_database(chunks, metadata, memId)
 
+            TRACKER.update_status(
+                user_id=self.md.user_id,
+                document_id=memId,
+                status=ProcessingStatus.COMPLETED,
+                progress=100
+            )
+
             response = AgentResponse(
                 transcript=self.text,
                 chunks=chunks,
