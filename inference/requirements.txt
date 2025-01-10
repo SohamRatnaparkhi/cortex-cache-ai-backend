@@ -29,6 +29,7 @@ exceptiongroup==1.2.2
 fastapi==0.114.1
 fastapi-cli==0.0.5
 filelock==3.16.1
+filetype==1.2.0
 frozenlist==1.4.1
 fsspec==2024.10.0
 google-ai-generativelanguage==0.6.10
@@ -57,10 +58,12 @@ jsonpointer==3.0.0
 langchain==0.3.0
 langchain-anthropic==0.2.3
 langchain-community==0.3.0
-langchain-core==0.3.13
+langchain-core==0.3.29
+langchain-google-genai==2.0.8
 langchain-groq==0.2.0
 langchain-openai==0.2.4
 langchain-text-splitters==0.3.0
+langchain-xai==0.1.1
 langcodes==3.4.0
 langsmith==0.1.137
 language_data==1.2.0

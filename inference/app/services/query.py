@@ -316,18 +316,37 @@ async def stream_response(
 
     try:
         llm = get_answer_llm(llm_type, is_pro=True)
-        i = 0
-        async for chunk in llm.astream([HumanMessage(content=prompt)]):
-            chunk_text = chunk.content
-            message_content.append(chunk_text)
-            # print(f"Chunk {i}: {chunk_text}")
-            # Format chunk for streaming
-            chunk_data = chunk_text.replace('\n', '\\n')
-            if first_chunk:
-                yield f"messageId: {message_id},data: {chunk_data}\n\n"
-                first_chunk = False
-            else:
-                yield f"data: {chunk_data}\n\n"
+        if (llm_type == 'gemini-pro' or llm_type == 'gemini-flash'):
+            llm = llms.gemini_model_pro if llm_type == 'gemini-pro' else llms.gemini_model
+            response = await llm.generate_content_async(
+                prompt,
+                # generation_config={"stream": True},
+                stream=True
+            )
+
+            async for chunk in response:
+                print(chunk)
+                chunk_text = chunk.text
+                message_content.append(chunk_text)
+                # Format chunk for streaming
+                chunk_data = chunk_text.replace('\n', '\\n')
+                if first_chunk:
+                    yield f"messageId: {message_id},data: {chunk_data}\n\n"
+                    first_chunk = False
+                else:
+                    yield f"data: {chunk_data}\n\n"
+        else:
+            async for chunk in llm.astream([HumanMessage(content=prompt)]):
+                chunk_text = chunk.content
+                message_content.append(chunk_text)
+                # print(f"Chunk {i}: {chunk_text}")
+                # Format chunk for streaming
+                chunk_data = chunk_text.replace('\n', '\\n')
+                if first_chunk:
+                    yield f"messageId: {message_id},data: {chunk_data}\n\n"
+                    first_chunk = False
+                else:
+                    yield f"data: {chunk_data}\n\n"
 
         # Store complete message
         complete_message = ''.join(message_content)
