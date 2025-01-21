@@ -45,7 +45,7 @@ def clone_git_repo(repo_url: str) -> Union[bool, str]:
         return False, f"Error cloning {repo_url}: {str(e)}"
 
 
-def extract_code_from_repo(repo_url: str, metadata: Metadata[GitSpecificMd]) -> AgentResponse:
+def extract_code_from_repo(repo_url: str, metadata: Metadata[GitSpecificMd], mem_id: str) -> AgentResponse:
     """
     Extract code from a git repository.
 
@@ -66,7 +66,7 @@ def extract_code_from_repo(repo_url: str, metadata: Metadata[GitSpecificMd]) -> 
                 memoryId=metadata.memId
             )
         content = get_every_file_content_in_folder(
-            path, is_code=True, repo_link=repo_url, md=metadata)
+            path, is_code=True, repo_link=repo_url, md=metadata, mem_id=mem_id)
         print("Now here")
         if TEMP_PATH != '/tmp' or TEMP_PATH != '/tmp/' or TEMP_PATH != 'tmp':
             os.system(f"rm -rf ./tmp")

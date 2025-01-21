@@ -52,7 +52,7 @@ class LinkAgent(ABC, Generic[T]):
         """
         pass
 
-    async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata]):
+    async def embed_and_store_chunks(self, chunks: List[str], metadata: List[Metadata], isCode=False):
         try:
             title = self.md.title
             description = self.md.description
@@ -60,9 +60,13 @@ class LinkAgent(ABC, Generic[T]):
             preprocessed_chunks = [
                 title + " " + description + " " + chunk for chunk in preprocessed_chunks]
 
+            for chunk in preprocessed_chunks:
+                print(chunk)
+
             TRACKER.update_status(
                 self.md.user_id, self.md.memId, ProcessingStatus.CREATING_EMBEDDINGS, 85)
-            embeddings = voyage_client.get_embeddings(preprocessed_chunks)
+            embeddings = voyage_client.get_embeddings(
+                preprocessed_chunks, isCode)
 
             vectors = get_vectors(metadata, embeddings)
 
@@ -108,7 +112,8 @@ class GitAgent(LinkAgent[GitSpecificMd]):
 
             TRACKER.create_status(
                 self.md.user_id, memId, self.md.title)
-            code = extract_code_from_repo(repo_url=repo_url, metadata=self.md)
+            code = extract_code_from_repo(
+                repo_url=repo_url, metadata=self.md, mem_id=memId)
 
             chunks = code.chunks
             meta_chunks = code.metadata
@@ -118,7 +123,7 @@ class GitAgent(LinkAgent[GitSpecificMd]):
             for meta in meta_chunks:
                 meta.memId = memId
 
-            await self.embed_and_store_chunks(chunks, meta_chunks)
+            await self.embed_and_store_chunks(chunks, meta_chunks, isCode=True)
             TRACKER.update_status(
                 self.md.user_id, memId, ProcessingStatus.STORING_DOCUMENT, 85)
             await self.store_memory_in_database(chunks, meta_chunks, memId)

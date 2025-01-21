@@ -16,7 +16,7 @@ batch_size = 128
 
 def get_embeddings(documents: list[str], is_code=False) -> list:
     try:
-        model = "voyage-3" if not is_code else "voyage-3-code"
+        model = "voyage-3" if not is_code else "voyage-code-3"
         embeddings = []
         for i in range(0, len(documents), batch_size):
             batch = documents[i:i + batch_size]
