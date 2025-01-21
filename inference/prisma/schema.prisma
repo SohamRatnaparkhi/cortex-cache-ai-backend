@@ -20,16 +20,17 @@ model ApiKeys {
 }
 
 model Conversation {
-  id        String             @id
-  title     String?
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @default(now())
-  userId    String
-  summary   String?
-  memoryIds String[]
-  status    ConversationStatus @default(ACTIVE)
-  User      User               @relation(fields: [userId], references: [id])
-  Message   Message[]
+  id                 String               @id
+  title              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @default(now())
+  userId             String
+  summary            String?
+  memoryIds          String[]
+  status             ConversationStatus   @default(ACTIVE)
+  User               User                 @relation(fields: [userId], references: [id])
+  Message            Message[]
+  SharedConversation SharedConversation[]
 
   @@index([userId, updatedAt])
 }
@@ -44,7 +45,7 @@ model Memory {
   tags      String[]
   metadata  Json?
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime
   mindMapId String?
   userId    String
   MindMap   MindMap? @relation(fields: [mindMapId], references: [id])
@@ -129,8 +130,9 @@ model User {
   createdAt                                    DateTime        @default(now())
   updatedAt                                    DateTime
   accountType                                  AccountType     @default(FREE)
-  currentBalance                               Int             @default(0)
-  totalUsedTokens                              Int             @default(0)
+  memoryCount                                  Int             @default(0)
+  // currentBalance                               Int             @default(0)
+  // totalUsedTokens                              Int             @default(0)
   ApiKeys                                      ApiKeys[]
   Conversation                                 Conversation[]
   Memory                                       Memory[]
@@ -142,9 +144,14 @@ model User {
   Session                                      Session[]
   AccessTokens                                 AccessTokens[]
 
-  ConnectedNotionPages ConnectedNotionPages[]
-  ConnectedGDriveFiles ConnectedGDriveFiles[]
-  MindMap              MindMap[]
+  ConnectedNotionPages                                   ConnectedNotionPages[]
+  ConnectedGDriveFiles                                   ConnectedGDriveFiles[]
+  MindMap                                                MindMap[]
+  Feedback                                               Feedback[]
+  SharedConversation_SharedConversation_fromUserIdToUser SharedConversation[]   @relation("SharedConversation_fromUserIdToUser")
+  SharedConversation_SharedConversation_toUserIdToUser   SharedConversation[]   @relation("SharedConversation_toUserIdToUser")
+  SharedConversation                                     SharedConversation[]
+  Usage                                                  Usage[]
 }
 
 model SocialUser {
@@ -237,10 +244,36 @@ model ConnectedGDriveFiles {
   @@id([userId, fileId])
 }
 
+model Feedback {
+  id        String       @id
+  userId    String
+  content   String
+  mediaUrl  String?
+  type      FeedbackType
+  createdAt DateTime     @default(now())
+  User      User         @relation(fields: [userId], references: [id])
+}
+
+model Waitlist {
+  email     String      @id
+  createdAt DateTime    @default(now())
+  type      AccountType
+}
+
+enum FeedbackType {
+  BUG
+  CHAT
+}
+
 enum AccountType {
   FREE
   PREMIUM
   ENTERPRISE
+  ALPHA_FREE
+  BETA_FREE
+  BETA_PREMIUM
+  ALPHA_PREMIUM
+  ALPHA_ONE_TIME
 }
 
 enum ConversationStatus {
@@ -252,4 +285,60 @@ enum ConversationStatus {
 enum Permission {
   VIEW
   EDIT
+}
+
+model SharedConversation {
+  id                                       String       @id
+  fromUserId                               String
+  toUserId                                 String
+  conversationId                           String
+  permission                               Permission
+  createdAt                                DateTime     @default(now())
+  User_SharedConversation_fromUserIdToUser User         @relation("SharedConversation_fromUserIdToUser", fields: [fromUserId], references: [id])
+  User_SharedConversation_toUserIdToUser   User         @relation("SharedConversation_toUserIdToUser", fields: [toUserId], references: [id])
+  Conversation                             Conversation @relation(fields: [conversationId], references: [id])
+  User                                     User?        @relation(fields: [userId], references: [id])
+  userId                                   String?
+
+  @@unique([fromUserId, toUserId, conversationId])
+}
+
+model Usage {
+  id         BigInt        @id @default(autoincrement())
+  userId     String
+  apiKey     String?
+  category   UsageCategory // High-level category (INFERENCE or PROCESSING)
+  type       UsageType // Specific type within category
+  model      ModelType
+  tokenCount BigInt
+  requestId  String        @unique
+  timestamp  DateTime      @default(now())
+  user       User          @relation(fields: [userId], references: [id])
+
+  @@index([userId, category, timestamp])
+  @@index([apiKey, category, timestamp])
+}
+
+enum UsageCategory {
+  INFERENCE
+  PROCESSING
+}
+
+enum UsageType {
+  WEB_SEARCH
+  RERANKING
+  PROCESSING
+  EMBEDDING
+}
+
+enum ModelType {
+  GPT_4O
+  GPT_4O_MINI
+  SONNET
+  HAIKU
+  LLAMA_3_1
+  LLAMA_3_2
+  GEMINI_1_5_FLASH
+  GEMINI_1_5_PRO
+  DEEPSEEK_V3
 }

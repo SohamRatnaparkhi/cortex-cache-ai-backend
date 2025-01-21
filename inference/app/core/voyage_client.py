@@ -1,6 +1,9 @@
+import asyncio
+import json
 import os
 import time
 from collections import namedtuple
+from itertools import islice
 from typing import List, Tuple
 
 import voyageai
@@ -8,6 +11,8 @@ from dotenv import load_dotenv
 
 from app.schemas.memory.ApiModel import Results, ResultsAfterReRanking
 from app.schemas.web_agent import ReRankedWebSearchResult, SearchResult
+# from app.services.query import process_gemini_response
+from app.utils import llms
 from app.utils.app_logger_config import logger
 
 if os.path.exists(".env"):
@@ -236,3 +241,218 @@ async def unified_rerank(
     except Exception as e:
         logger.error(f"Error in unified reranking: {e}")
         return [], []
+
+BATCH_SIZE = 10
+MAX_CONCURRENT_BATCHES = 3
+
+
+def create_reranking_prompt(query: str, documents: List[str]) -> str:
+    """
+    Creates a prompt for reranking documents.
+    """
+    # Prepare documents in correct format
+    formatted_docs = []
+    for i, doc in enumerate(documents):
+        formatted_docs.append({
+            "index": i,
+            "text": doc
+        })
+
+    prompt = f"""Rate these documents based on relevance to: "{query}"
+
+Rules:
+1. Rate semantic relevance to query
+2. Score range: 0.0 to 1.0
+3. If the document is not related then score it as 0.0
+4. Return only relevant documents (score > 0.45)
+
+NOTE:
+- Punish irrelevant results strictly by grading them low
+- Reward relevant results by grading them high
+
+Scoring guide:
+0.8-1.0 = Perfect match
+0.6-0.8 = Good match
+0.4-0.6 = Partial match
+0.0-0.4 = Poor match
+
+Input documents:
+{json.dumps(formatted_docs, indent=2)}
+
+Required output format (JSON array):
+[
+  {{"index": 0, "score": 0.95}},
+  {{"index": 2, "score": 0.75}}
+]"""
+
+    return prompt
+
+
+def process_gemini_response(response):
+    """
+    Process Gemini API response.
+    """
+    try:
+        text = response.candidates[0].content.parts[0].text
+        token_counts = {
+            'prompt_tokens': response.usage_metadata.prompt_token_count,
+            'completion_tokens': response.usage_metadata.candidates_token_count,
+            'total_tokens': response.usage_metadata.total_token_count
+        }
+        # Clean the response text - remove any non-JSON content
+        text = text.strip()
+        if text.startswith('```json'):
+            text = text[7:]
+        if text.endswith('```'):
+            text = text[:-3]
+        text = text.strip()
+        return text, token_counts
+    except Exception as e:
+        logger.error(f"Error processing Gemini response: {e}")
+        return None, None
+
+
+async def process_batch(
+    query: str,
+    batch_data: List[tuple],
+    start_idx: int,
+) -> List[dict]:
+    """
+    Process a single batch of documents through Gemini.
+    """
+    try:
+        # Extract document content
+        documents = [item[2] for item in batch_data]
+
+        # Create prompt
+        prompt = create_reranking_prompt(query, documents)
+
+        # Get response from Gemini
+        model = llms.gemini_model
+        response = await model.generate_content_async(prompt)
+
+        # Process response
+        text, _ = process_gemini_response(response)
+        if not text:
+            return []
+
+        try:
+            # Parse JSON response
+            ranking_results = json.loads(text)
+
+            # Validate response format
+            if not isinstance(ranking_results, list):
+                logger.error("Invalid response format: not a list")
+                return []
+
+            # Adjust indices for batch offset
+            for item in ranking_results:
+                if 'index' in item and 'score' in item:
+                    item['index'] = item['index'] + start_idx
+
+            return ranking_results
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            return []
+
+    except Exception as e:
+        logger.error(f"Batch processing error: {e}")
+        return []
+
+
+async def unified_rerank_gemini(
+    memory_data: List[Results] = None,
+    web_data: List[SearchResult] = None,
+    k: int = 10,
+    query: str = "",
+    memory_threshold: float = 0.4,
+    web_threshold: float = 0.3,
+) -> Tuple[List[ResultsAfterReRanking], List[ReRankedWebSearchResult]]:
+    """
+    Rerank memory and web data using Gemini with parallel batching.
+    """
+    try:
+        if not memory_data and not web_data:
+            return [], []
+
+        # Prepare combined data
+        all_data = []
+        if memory_data:
+            all_data.extend([("memory", i, item.mem_data)
+                             for i, item in enumerate(memory_data)])
+        if web_data:
+            all_data.extend([("web", i, item['content'])
+                             for i, item in enumerate(web_data)
+                             if item.get('content')])
+
+        # Create batches
+        BATCH_SIZE = 10
+        batches = []
+        for i in range(0, len(all_data), BATCH_SIZE):
+            batches.append(all_data[i:i + BATCH_SIZE])
+
+        # Process batches with semaphore
+        MAX_CONCURRENT_BATCHES = 3
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+
+        async def process_batch_with_semaphore(batch, start_idx):
+            async with semaphore:
+                return await process_batch(query, batch, start_idx)
+
+        # Run batches concurrently
+        tasks = [
+            process_batch_with_semaphore(batch, i * BATCH_SIZE)
+            for i, batch in enumerate(batches)
+        ]
+        batch_results = await asyncio.gather(*tasks)
+
+        # Combine results
+        all_rankings = []
+        for batch in batch_results:
+            all_rankings.extend(batch)
+
+        # Process rankings
+        memory_results = []
+        web_results = []
+
+        for ranking in all_rankings:
+            try:
+                idx = ranking['index']
+                score = float(ranking['score'])
+                data_type, original_index, _ = all_data[idx]
+
+                if data_type == "memory" and score >= memory_threshold:
+                    memory_results.append(
+                        ResultsAfterReRanking(
+                            memId=memory_data[original_index].memId,
+                            chunkId=memory_data[original_index].chunkId,
+                            mem_data=memory_data[original_index].mem_data,
+                            score=score,
+                        )
+                    )
+                elif data_type == "web" and score >= web_threshold:
+                    web_results.append(
+                        ReRankedWebSearchResult(
+                            title=web_data[original_index]['title'],
+                            url=web_data[original_index]['url'],
+                            content=web_data[original_index].get(
+                                'content', ""),
+                            additional_info=web_data[original_index]['additional_info'],
+                            source=web_data[original_index]['source'],
+                            score=score,
+                        )
+                    )
+            except (KeyError, IndexError) as e:
+                logger.error(f"Error processing ranking result: {e}")
+                continue
+
+        # Sort and return top k results
+        memory_results.sort(key=lambda x: x.score, reverse=True)
+        web_results.sort(key=lambda x: x.score, reverse=True)
+
+        return memory_results[:k], web_results[:k]
+
+    except Exception as e:
+        logger.error(f"Error in unified reranking: {e}")
+        return unified_rerank(memory_data, web_data, k, query, memory_threshold, web_threshold)

@@ -102,10 +102,10 @@ async def handle_query_response(
         if query.use_web:
             web_results = await get_web_results(llm_query, query.web_sources)
 
-        reranked_results = await voyage_client.unified_rerank(
+        reranked_results = await voyage_client.unified_rerank_gemini(
             k=15,
             memory_data=memory_results,
-            query=llm_query,
+            query=f"User query: {query.query}\nRefined query: {llm_query}",
             web_data=web_results,
             memory_threshold=0.4,
             web_threshold=0.3
