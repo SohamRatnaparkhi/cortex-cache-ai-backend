@@ -52,14 +52,14 @@ For each chunk, your responsibilities are as follows:
 3. Search Relevance: Ensure the description will enhance the retrievability of this chunk for a search query.
 4. Restrict description to 3 to 4 sentences
 
+In case of code snippets, provide a brief description of the code's functionality, purpose, or key features.
+
 Improving Retrievability: Your descriptions should help the chunk surface during a search by:
 1. Keyword Enrichment: Include key terms or phrases that are likely to match user queries but are also contextually relevant to the chunk.
 2. Contextual Precision: Be specific about the chunk's subject matter, avoiding vague terms. This allows embeddings to capture distinct semantic meaning for more accurate search results.
 3. Relational Clues: If the chunk provides supporting information (like examples, definitions, or conclusions), ensure the description reflects this to aid in related query retrieval.
 
-Your output should be structured in JSON format, with each string as a key and its context-aware description as the value. Do not use any XML tags in your output.
-
-Here's an example of how your output should be structured:
+Your output should be structured in JSON format, with each string as a key and its context-aware description as the value. Do not use any XML tags in your output. Directly start with the json output. Do not include any additional commentary or explanation.
 
 <ideal_output>
 {IDEAL_OUTPUT}
@@ -179,7 +179,8 @@ async def get_context_summary_from_openai(context: str, sentences: List[str]) ->
 
         # return res if res != None else manual_parsing(len(sentences), res)
     except Exception as e:
-        print(f"Error occurred while getting context summary from openai: {e}")
+        print(
+            f"Error occurred while getting context summary from openai: {e}, res: {res}")
         return manual_parsing(len(sentences), res)
 
 
@@ -253,7 +254,8 @@ async def get_context_summary_from_anthropic(context: str, sentences: List[str])
 
         return OutputModelStructure.model_validate(res, strict=False)
     except Exception as e:
-        print(f"Error occurred while getting context summary: {e}")
+        print(
+            f"Error occurred while getting context summary: {e}: res = {res}")
         return manual_parsing(len(sentences), res)
 
 

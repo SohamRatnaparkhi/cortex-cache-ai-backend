@@ -83,7 +83,7 @@ def read_file(path: str) -> str:
         return f"Error reading {path}: {str(e)}"
 
 
-def get_every_file_content_in_folder(folder_path: str, is_code: bool, repo_link: str, md: Metadata[GitSpecificMd]) -> AgentResponse:
+def get_every_file_content_in_folder(folder_path: str, is_code: bool, repo_link: str, md: Metadata[GitSpecificMd], mem_id) -> AgentResponse:
     """
     Get the content of every file in a folder and its subfolders, with chunks and metadata.
 
@@ -132,12 +132,12 @@ def get_every_file_content_in_folder(folder_path: str, is_code: bool, repo_link:
                                 file_name=file_path,
                                 programming_language=ext,
                                 chunk_type="code",
-                                chunk_id=f"{chunk_id}"
+                                chunk_id=f"{mem_id}_{chunk_id}"
                             )
                             metadata.append(current_md)
                             chunk_id += 1
                     elif ext in OTHER_ALLOWED_CONFIG_EXT:
-                        code_chunks = chunk_text(file_content, 1000)
+                        code_chunks = chunk_text(file_content, 500)
                         chunks.extend(code_chunks)
                         for i in range(len(code_chunks)):
                             current_md.specific_desc = GitSpecificMd(
@@ -181,6 +181,7 @@ def chunk_code(content: str, ext: str, context_size: int) -> list:
     Split code content into chunks using a language-specific splitter.
 
     Args:
+
         content (str): The code content to be split.
         ext (str): The file extension indicating the programming language.
         context_size (int): The desired size of each chunk.

@@ -59,7 +59,7 @@ gemini_generation_config = {
 }
 
 gemini_model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-1.5-flash-8b",
     generation_config=gemini_generation_config,
 )
 gemini_model_pro = genai.GenerativeModel(
