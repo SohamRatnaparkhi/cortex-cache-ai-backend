@@ -34,31 +34,38 @@ def flatten_metadata(metadata: Metadata):
     return flattened
 
 
-def combine_data_chunks(chunks: str, meta_chunks: List[Metadata], memId: str, diff=2):
-    JOINER = ' <joiner> '
-    CENTRAL_OPENER = ' <central> '
-    CENTRAL_CLOSER = ' </central> '
-
-    # prev = -diff
-    # next = diff
+def combine_data_chunks(chunks: str, meta_chunks: List[Metadata], memId: str, diff=1):
+    JOINER = '<joiner>'
+    CENTRAL_OPENER = '<central>'
+    CENTRAL_CLOSER = '</central>'
 
     combined_chunks = []
     for i in range(len(chunks)):
-        prev = i - diff
-        next = i + diff + 1
-        current_chunk = chunks[i]
-        current_chunk = CENTRAL_OPENER + current_chunk + CENTRAL_CLOSER
-        while prev > 0 and prev < i:
-            current_chunk = chunks[prev] + JOINER + current_chunk
-            prev += 1
-        while next < len(chunks) and next <= i + 2:
-            current_chunk = current_chunk + JOINER + chunks[next]
-            next += 1
+        # Calculate bounds
+        prev = max(0, i - diff)
+        next = min(len(chunks), i + diff + 1)
+
+        # Build the combined chunk
+        parts = []
+
+        # Add previous chunks with joiners
+        if prev < i:
+            parts.extend([f"{chunks[j]} {JOINER}" for j in range(prev, i)])
+
+        # Add central chunk
+        parts.append(f"{CENTRAL_OPENER}{chunks[i]}{CENTRAL_CLOSER}")
+
+        # Add next chunks with joiners
+        if i + 1 < next:
+            parts.extend([f"{JOINER} {chunks[j]}" for j in range(i + 1, next)])
+
+        # Join all parts
+        current_chunk = ' '.join(parts)
+
         combined_chunks.append({
             "memData": current_chunk,
             "chunkId": f"{memId}_{i}",
             "metadata": meta_chunks[i].json(),
         })
-    # print('chunking done')
-    # print(combined_chunks)
+
     return combined_chunks

@@ -70,6 +70,9 @@ class TextAgent:
                 description = self.md.description
                 preprocessed_chunks = [
                     title + " " + description + " " + chunk for chunk in preprocessed_chunks]
+                # for chunk in preprocessed_chunks:
+                #     print(chunk)
+                #     print("-"*20)
                 embeddings = voyage_client.get_embeddings(preprocessed_chunks)
                 logger.debug(f"Length after embedding: {len(embeddings)}")
                 logger.debug(f"Embedding dimensions: {len(embeddings[0])}")

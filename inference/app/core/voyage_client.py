@@ -1,10 +1,11 @@
 import asyncio
 import json
 import os
+import re
 import time
 from collections import namedtuple
 from itertools import islice
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import voyageai
 from dotenv import load_dotenv
@@ -248,38 +249,44 @@ MAX_CONCURRENT_BATCHES = 3
 
 def create_reranking_prompt(query: str, documents: List[str]) -> str:
     """
-    Creates a prompt for reranking documents.
+    Creates a prompt for reranking documents with enhanced scoring granularity
     """
-    # Prepare documents in correct format
-    formatted_docs = []
-    for i, doc in enumerate(documents):
-        formatted_docs.append({
-            "index": i,
-            "text": doc
-        })
+    formatted_docs = [{"index": i, "text": doc}
+                      for i, doc in enumerate(documents)]
 
-    prompt = f"""Rate these documents based on relevance to: "{query}"
+    prompt = f"""Analyze and score document relevance to query: "{query}"
 
-Rules:
-1. Rate semantic relevance to query
-2. Score range: 0.0 to 1.0
-3. If the document is not related then score it as 0.0
-4. Return only relevant documents (score > 0.45)
+# Scoring Protocol
+1. Relevance Dimensions:
+- Contextual Alignment: Does the document directly address the query's core subject?
+- Specificity Match: Contains specific entities/terms from query?
+- Scope Coverage: Percentage of query aspects addressed
+- Signal Quality: Clear information vs filler content ratio
 
-NOTE:
-- Punish irrelevant results strictly by grading them low
-- Reward relevant results by grading them high
+2. Scoring Matrix:
+0.95-1.0 = Exact match (all dimensions satisfied + extra context)
+0.85-0.94 = Near-perfect match (minor missing elements)
+0.75-0.84 = Strong relevance (core subject addressed)
+0.65-0.74 = Partial relevance (some related concepts)
+0.45-0.64 = Weak connection (tangential mentions)
+0.0-0.44 = Irrelevant (score as 0.0)
 
-Scoring guide:
-0.8-1.0 = Perfect match
-0.6-0.8 = Good match
-0.4-0.6 = Partial match
-0.0-0.4 = Poor match
+3. Penalty Rules:
+- -0.3 for containing contradictory information
+- -0.2 for off-topic sections >30% of content
+- -0.1 for keyword stuffing without context
 
-Input documents:
+# Processing Guidelines
+1. Compare documents relatively before final scoring
+2. Prioritize specificity over general information
+3. Treat document length neutrally unless affecting relevance
+4. Score decisively - avoid 0.4-0.6 range unless ambiguous
+
+Input Documents:
 {json.dumps(formatted_docs, indent=2)}
 
-Required output format (JSON array):
+# Output Requirements - STRICT JSON OUTPUT WITH NO ADDITIONAL TEXT and COMMENTS
+Return JSON array with ALL original indexes (JSON array):
 [
   {{"index": 0, "score": 0.95}},
   {{"index": 2, "score": 0.75}}
@@ -288,28 +295,86 @@ Required output format (JSON array):
     return prompt
 
 
-def process_gemini_response(response):
+def process_gemini_response_json(response) -> Tuple[Optional[str], Optional[Dict]]:
     """
-    Process Gemini API response.
+    Processes Gemini API response with enhanced JSON parsing resilience
     """
     try:
+        # Extract response content
         text = response.candidates[0].content.parts[0].text
         token_counts = {
             'prompt_tokens': response.usage_metadata.prompt_token_count,
             'completion_tokens': response.usage_metadata.candidates_token_count,
             'total_tokens': response.usage_metadata.total_token_count
         }
-        # Clean the response text - remove any non-JSON content
+
+        # Normalize response text
         text = text.strip()
-        if text.startswith('```json'):
-            text = text[7:]
-        if text.endswith('```'):
-            text = text[:-3]
-        text = text.strip()
-        return text, token_counts
+        clean_text = re.sub(r'^```json|```$', '', text,
+                            flags=re.MULTILINE).strip()
+
+        # Attempt direct JSON parsing
+        try:
+            json.loads(clean_text)
+            return clean_text, token_counts
+        except json.JSONDecodeError as e:
+            logger.debug(
+                f"Initial JSON parse failed, attempting recovery: {e}")
+
+        # Fallback 1: Find JSON in malformed responses
+        json_pattern = r'\[\s*{.*?}\s*\]'  # Array of objects pattern
+        matches = re.findall(json_pattern, clean_text, re.DOTALL)
+
+        if matches:
+            # Try longest match first (most likely candidate)
+            matches.sort(key=len, reverse=True)
+            for match in matches:
+                try:
+                    # Clean common formatting issues
+                    sanitized = re.sub(
+                        r'(?<=\{|\,)\s*(\w+)(?=:)', r'"\1"', match)
+                    parsed = json.loads(sanitized)
+                    if validate_reranking_json(parsed):
+                        return json.dumps(parsed), token_counts
+                except json.JSONDecodeError:
+                    continue
+
+        # Fallback 2: Find any JSON-like structures
+        bracket_pattern = r'\{.*?\}'  # Any object pattern
+        objects = re.findall(bracket_pattern, clean_text, re.DOTALL)
+        valid_objects = []
+
+        for obj in objects:
+            try:
+                sanitized = re.sub(r'([{,]\s*)(\w+)(\s*:)', r'\1"\2"\3', obj)
+                parsed = json.loads(sanitized)
+                if {'index', 'score'}.issubset(parsed.keys()):
+                    valid_objects.append(parsed)
+            except Exception:
+                continue
+
+        if valid_objects:
+            return json.dumps(valid_objects), token_counts
+
+        logger.error("Failed to parse JSON from response")
+        return None, token_counts
+
     except Exception as e:
-        logger.error(f"Error processing Gemini response: {e}")
+        logger.error(f"Error processing response: {str(e)}")
+        logger.debug(f"Problematic response content: {text}")
         return None, None
+
+
+def validate_reranking_json(data) -> bool:
+    """Validates reranking JSON structure"""
+    if not isinstance(data, list):
+        return False
+    return all(
+        isinstance(item, dict) and
+        'index' in item and
+        'score' in item
+        for item in data
+    )
 
 
 async def process_batch(
@@ -332,7 +397,7 @@ async def process_batch(
         response = await model.generate_content_async(prompt)
 
         # Process response
-        text, _ = process_gemini_response(response)
+        text, _ = process_gemini_response_json(response)
         if not text:
             return []
 
@@ -366,8 +431,8 @@ async def unified_rerank_gemini(
     web_data: List[SearchResult] = None,
     k: int = 10,
     query: str = "",
-    memory_threshold: float = 0.4,
-    web_threshold: float = 0.3,
+    memory_threshold: float = 0.40,
+    web_threshold: float = 0.5,
 ) -> Tuple[List[ResultsAfterReRanking], List[ReRankedWebSearchResult]]:
     """
     Rerank memory and web data using Gemini with parallel batching.
@@ -412,6 +477,9 @@ async def unified_rerank_gemini(
         for batch in batch_results:
             all_rankings.extend(batch)
 
+        if len(all_rankings) == 0:
+            return unified_rerank(memory_data, web_data, k, query, memory_threshold, web_threshold)
+
         # Process rankings
         memory_results = []
         web_results = []
@@ -427,7 +495,8 @@ async def unified_rerank_gemini(
                         ResultsAfterReRanking(
                             memId=memory_data[original_index].memId,
                             chunkId=memory_data[original_index].chunkId,
-                            mem_data=memory_data[original_index].mem_data,
+                            mem_data=filter_content_in_memory_data(
+                                memory_data[original_index].mem_data),
                             score=score,
                         )
                     )
@@ -447,7 +516,6 @@ async def unified_rerank_gemini(
                 logger.error(f"Error processing ranking result: {e}")
                 continue
 
-        # Sort and return top k results
         memory_results.sort(key=lambda x: x.score, reverse=True)
         web_results.sort(key=lambda x: x.score, reverse=True)
 
@@ -456,3 +524,31 @@ async def unified_rerank_gemini(
     except Exception as e:
         logger.error(f"Error in unified reranking: {e}")
         return unified_rerank(memory_data, web_data, k, query, memory_threshold, web_threshold)
+
+
+def filter_content_in_memory_data(data: str) -> str:
+    if not data:
+        return ""
+
+    # Extract central content
+    central_match = re.search(r'<central>(.*?)</central>', data, re.DOTALL)
+    central_content = central_match.group(1) if central_match else ""
+
+    # Extract joiner content
+    joiner_matches = re.finditer(r'<joiner>(.*?)</joiner>', data, re.DOTALL)
+    joiner_content = []
+
+    for match in joiner_matches:
+        text = match.group(1)
+        # Split on periods and take max 2 sentences
+        sentences = [s.strip() + '.' for s in text.split('.') if s.strip()]
+        joiner_content.append("".join(sentences[:2]))
+
+    # Combine all content
+    filtered_content = f"{central_content} {' '.join(joiner_content)}"
+
+    # Remove any remaining tags
+    filtered_content = re.sub(r'<[^>]+>', '', filtered_content)
+
+    # Clean up whitespace
+    return ' '.join(filtered_content.split())
