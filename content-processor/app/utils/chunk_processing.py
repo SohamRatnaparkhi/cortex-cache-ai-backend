@@ -30,45 +30,63 @@ openai_client = AsyncOpenAI(
     max_retries=3,
 )
 
+deepseek_client = AsyncOpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    max_retries=3,
+    base_url="https://api.deepseek.com",
+)
+
 BULK_CONTEXT_PROMPT = """
-You are tasked with generating context-aware descriptions for text chunks to support contextual embeddings in a Retrieval-Augmented Generation (RAG) system. These descriptions will help improve search retrieval by situating each chunk within the overall document.
+You are an expert in contextual analysis and semantic search optimization. Your task is to generate precise, search-optimized descriptions for text chunks that will enhance retrieval in a RAG system.
 
-You will be given the following inputs:
-
-1. Overall Document Context: A brief description that encapsulates the theme or subject of the document.
+INPUT:
+1. Document Context:
 <context>
 {CONTEXT}
 </context>
 
-2. Chunked Text: A set of text snippets extracted from the document.
+2. Text Chunks:
 <sentences>
 {sentences_xml}
 </sentences>
 
-For each chunk, your responsibilities are as follows:
+REQUIREMENTS:
+1. Generate descriptions that:
+   - Capture the semantic relationship with the document context
+   - Include key entities, technical terms, and domain-specific vocabulary
+   - Maintain hierarchical context (e.g., section/subsection relationships)
+   - Are optimized for semantic search retrieval
+   - Are exactly 3 sentences long for consistency
 
-1. Contextual Analysis: Examine the chunk's relevance within the overall document context.
-2. Description Creation: Write a short, precise description of how the chunk relates to the document's main theme. Include important contextual elements such as section headings or key points, product names, etc. if applicable.
-3. Search Relevance: Ensure the description will enhance the retrievability of this chunk for a search query.
-4. Restrict description to 3 to 4 sentences
+2. Each description must include:
+   - Primary topic/subject of the chunk
+   - Relationship to the document's main theme
+   - Supporting details or examples if present
+   - Technical terminology preserved verbatim
 
-In case of code snippets, provide a brief description of the code's functionality, purpose, or key features.
+3. Search Optimization Guidelines:
+   - Incorporate likely search terms naturally
+   - Use precise, domain-specific language
+   - Include relevant synonyms or related concepts
+   - Preserve hierarchical information
 
-Improving Retrievability: Your descriptions should help the chunk surface during a search by:
-1. Keyword Enrichment: Include key terms or phrases that are likely to match user queries but are also contextually relevant to the chunk.
-2. Contextual Precision: Be specific about the chunk's subject matter, avoiding vague terms. This allows embeddings to capture distinct semantic meaning for more accurate search results.
-3. Relational Clues: If the chunk provides supporting information (like examples, definitions, or conclusions), ensure the description reflects this to aid in related query retrieval.
+OUTPUT FORMAT:
+- Pure JSON object
+- Each key is the sentence identifier
+- Each value is the optimized description
+- No XML tags or additional commentary
 
-Your output should be structured in JSON format, with each string as a key and its context-aware description as the value. Do not use any XML tags in your output. Directly start with the json output. Do not include any additional commentary or explanation.
-
-<ideal_output>
+Example structure:
 {IDEAL_OUTPUT}
-</ideal_output>
 
-Remember, the goal is to create descriptions that will help in building context-aware embeddings. These embeddings should improve the ability to retrieve relevant chunks of text during searches. Your descriptions should reflect the relationship between each chunk and the overall document or topic.
+Focus on creating descriptions that will generate embeddings capable of:
+1. Accurate semantic matching
+2. Context-aware retrieval
+3. Hierarchical understanding
+4. Technical precision
 
-Provide your output in JSON format without any additional commentary or XML tags.
-"""
+Respond only with the JSON output, no additional text."""
+
 EXAMPLE = """
 <examples>
 <example>
@@ -105,7 +123,9 @@ Carbon pricing, such as taxes and cap-and-trade, incentivizes emission reduction
 <sentence10>
 Adaptation strategies include drought-resistant crops and flood defenses.
 </sentence10>
-<ideal_output>
+
+
+EXAMPLE JSON OUTPUT:
 {
     "sentence1": "Establishes global climate science and policy organization.",
     "sentence2": "Explains the greenhouse effect's role in climate change.",
@@ -118,7 +138,7 @@ Adaptation strategies include drought-resistant crops and flood defenses.
     "sentence9": "Describes economic tools to reduce greenhouse gas emissions.",
     "sentence10": "Explains practical adaptation strategies for climate resilience."
 }
-</ideal_output>
+
 </example>
 </examples>
 """
@@ -137,7 +157,7 @@ class OutputModelStructure(BaseModel):
     sentence10: Optional[str] = ""
 
 
-async def get_context_summary_from_openai(context: str, sentences: List[str]) -> OutputModelStructure:
+async def get_context_summary_from_openai(context: str, sentences: List[str], is_deepseek=False) -> OutputModelStructure:
     res = None
     try:
         sentences_xml = "\n".join([
@@ -156,6 +176,8 @@ async def get_context_summary_from_openai(context: str, sentences: List[str]) ->
         prompt = BULK_CONTEXT_PROMPT.format(
             CONTEXT=context, sentences_xml=sentences_xml, IDEAL_OUTPUT=ideal_output)
 
+        client = deepseek_client if is_deepseek else openai_client
+        model = "deepseek-chat" if is_deepseek else "gpt-4o-mini"
         response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0.0,
@@ -271,9 +293,10 @@ async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
         NEXT = 30
         CURRENT = 10
 
-        # Split the chunks into batches for anthropic and openai
-        anthropic_batches = []
+        # Split chunks into batches for three models based on ratios
+        deepseek_batches = []
         openai_batches = []
+        claude_batches = []
 
         TRACKER.update_status(
             userId, memoryId, ProcessingStatus.CONTEXTUALIZING, 20)
@@ -286,6 +309,7 @@ async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
             (total_chunks // step_size_for_percentage_update), 1)
         percentage_update_per_step = max_percentage // chunks_per_step if chunks_per_step > 0 else max_percentage
 
+        # Distribute chunks based on ratios (0.5, 0.3, 0.2)
         for i in range(0, len(chunks), CURRENT):
             start = max(0, i - PREVIOUS)
             end = min(len(chunks), i + CURRENT + NEXT)
@@ -295,10 +319,19 @@ async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
                 'current_start': i,
                 'current_end': i + CURRENT
             }
-            if (i // CURRENT) % 2 == 0:
-                anthropic_batches.append(batch)
-            else:
+
+            # Use modulo 10 to distribute according to ratios
+            # 0-4 (5 numbers) -> Deepseek (50%)
+            # 5-7 (3 numbers) -> OpenAI (30%)
+            # 8-9 (2 numbers) -> Claude (20%)
+            distribution_index = (i // CURRENT) % 10
+
+            if distribution_index < 5:
+                deepseek_batches.append(batch)
+            elif distribution_index < 8:
                 openai_batches.append(batch)
+            else:
+                claude_batches.append(batch)
 
         async def process_batches(batches, model):
             percentage = 20
@@ -309,11 +342,13 @@ async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
                 sentences = chunks[batch['current_start']:batch['current_end']]
 
                 if model == 'openai':
-                    output = await get_context_summary_from_openai(context_text, sentences)
-                elif model == 'anthropic':
+                    output = await get_context_summary_from_openai(context_text, sentences, is_deepseek=False)
+                elif model == 'deepseek':
+                    output = await get_context_summary_from_openai(context_text, sentences, is_deepseek=True)
+                elif model == 'claude':
                     output = await get_context_summary_from_anthropic(context_text, sentences)
                 else:
-                    raise ValueError("Unknown model")
+                    raise ValueError(f"Unknown model: {model}")
 
                 output = output.model_dump()
                 for j in range(len(sentences)):
@@ -329,18 +364,19 @@ async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
 
         # Create and gather tasks for concurrent execution
         tasks = [
-            process_batches(anthropic_batches, 'anthropic'),
-            process_batches(openai_batches, 'openai')
+            process_batches(deepseek_batches, 'deepseek'),
+            process_batches(openai_batches, 'openai'),
+            process_batches(claude_batches, 'claude')
         ]
 
-        # Wait for both tasks to complete and gather results
+        # Wait for all tasks to complete and gather results
         results = await asyncio.gather(*tasks)
 
-        # Combine results from both tasks
+        # Combine results from all tasks
         for batch_result in results:
             updated_chunks.extend(batch_result)
 
-        print("Updated chunks length - " + str(len(updated_chunks)))
+        print(f"Updated chunks length - {len(updated_chunks)}")
         return updated_chunks
 
     except Exception as e:
