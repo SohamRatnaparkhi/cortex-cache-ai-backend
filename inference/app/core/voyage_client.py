@@ -267,8 +267,8 @@ def create_reranking_prompt(query: str, documents: List[str]) -> str:
 0.95-1.0 = Exact match (all dimensions satisfied + extra context)
 0.85-0.94 = Near-perfect match (minor missing elements)
 0.75-0.84 = Strong relevance (core subject addressed)
-0.65-0.74 = Partial relevance (some related concepts)
-0.45-0.64 = Weak connection (tangential mentions)
+0.55-0.74 = Partial relevance (some related concepts)
+0.45-0.5 = Weak connection (tangential mentions)
 0.0-0.44 = Irrelevant (score as 0.0)
 
 3. Penalty Rules:
