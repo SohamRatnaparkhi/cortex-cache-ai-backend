@@ -551,4 +551,8 @@ def filter_content_in_memory_data(data: str) -> str:
     filtered_content = re.sub(r'<[^>]+>', '', filtered_content)
 
     # Clean up whitespace
-    return ' '.join(filtered_content.split())
+    ans = ' '.join(filtered_content.split())
+
+    if len(ans) < 20:
+        return data
+    return ans
