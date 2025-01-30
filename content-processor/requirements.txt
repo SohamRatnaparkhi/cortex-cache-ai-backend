@@ -181,3 +181,4 @@ google-auth==2.36.0
 google-auth-httplib2==0.2.0
 google-cloud-core==2.4.1
 opencv-python==4.10.0.84
+fireworks-ai==0.15.124

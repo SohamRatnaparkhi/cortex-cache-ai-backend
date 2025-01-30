@@ -2,11 +2,14 @@ import os
 
 import google.generativeai as genai
 from dotenv import load_dotenv
+from fireworks.client import AsyncFireworks
 from langchain_anthropic import ChatAnthropic
+from langchain_fireworks import Fireworks
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_xai import ChatXAI
+from openai import AsyncOpenAI
 
 if os.path.exists(".env"):
     load_dotenv()
@@ -16,6 +19,8 @@ genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPEN_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
 
 XAI_API_KEY = os.getenv("XAI_API_KEY")
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
@@ -23,6 +28,7 @@ os.environ["OPENAI_API_KEY"] = OPEN_API_KEY
 os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY
 os.environ["XAI_API_KEY"] = XAI_API_KEY
 os.environ["GOOGLE_API_KEY"] = os.environ["GEMINI_API_KEY"]
+os.environ["FIREWORKS_API_KEY"] = FIREWORKS_API_KEY
 
 summary_llm = ChatOpenAI(
     api_key=OPEN_API_KEY,
@@ -65,6 +71,17 @@ gemini_model = genai.GenerativeModel(
 gemini_model_pro = genai.GenerativeModel(
     model_name="gemini-1.5-pro",
     generation_config=gemini_generation_config,
+)
+
+deepseek_client = AsyncOpenAI(
+    # api_key=FIREWORKS_API_KEY,
+    api_key=DEEPSEEK_API_KEY,
+    base_url="https://api.deepseek.com"
+    # base_url="https://api.fireworks.ai/inference/v1"
+)
+print("FIREWORKS_API_KEY", FIREWORKS_API_KEY)
+fireworks_client = AsyncFireworks(
+    api_key=FIREWORKS_API_KEY,
 )
 
 
@@ -148,6 +165,15 @@ def get_answer_llm(llm_name: str = 'gpt-4o', is_pro: bool = False):
     if llm_name == 'llama-3.2-90b':
         return ChatGroq(
             model="llama-3.2-90b",
+            temperature=0.7,
+            max_tokens=1000,
+            timeout=None,
+            max_retries=3,
+        )
+
+    if llm_name == 'deepseek-r1':
+        return Fireworks(
+            model="deepseek-r1",
             temperature=0.7,
             max_tokens=1000,
             timeout=None,

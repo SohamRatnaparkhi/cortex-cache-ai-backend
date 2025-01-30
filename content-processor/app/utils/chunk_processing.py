@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
+from fireworks.client import AsyncFireworks
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
@@ -19,6 +20,10 @@ if os.path.exists('.env'):
 
 MAX_CHUNK_SIZE = 20
 CONTEXT_WINDOW_SIZE = 40
+
+fireworks_client = AsyncFireworks(
+    api_key=os.getenv("FIREWORKS_API_KEY"),
+)
 
 anthropic_client = AsyncAnthropic(
     api_key=os.getenv("ANTHROPIC_API_KEY"),
@@ -157,6 +162,59 @@ class OutputModelStructure(BaseModel):
     sentence10: Optional[str] = ""
 
 
+async def get_context_from_fireworks(context, sentences: List[str]) -> List[str]:
+    """
+    Get context for the sentences from the Fireworks API.
+
+    Args:
+        context (str): The overall document or topic context
+        sentences (List[str]): List of sentences to analyze
+
+    Returns:
+        List[str]: List of context descriptions for each sentence
+    """
+    res = None
+    try:
+        sentences_xml = "\n".join([
+            f"    <sentence{i+1}> {sentence} </sentence{i+1}>"
+            for i, sentence in enumerate(sentences)
+        ])
+
+        ideal_output = ""
+
+        for i in range(len(sentences)):
+            ideal_output += f"\"sentence{i+1}\": \"Description of the sentence {i+1}.\",\n"
+
+        ideal_output = "{\n" + ideal_output + "\n}"
+
+        # Create the prompt
+        prompt = BULK_CONTEXT_PROMPT.format(
+            CONTEXT=context, sentences_xml=sentences_xml, IDEAL_OUTPUT=ideal_output)
+
+        response = await fireworks_client.chat.completions.acreate(
+            model="accounts/fireworks/models/deepseek-v3",
+            temperature=0.0,
+            messages=[
+                {"role": "user", "content": EXAMPLE},
+                {"role": "user", "content": prompt},
+            ],
+            stream=False
+        )
+
+        # logger.debug(response.usage)
+        # print(response)
+        res = response.choices[0].message.content
+
+        # convert to json object
+        res = json.loads(res)
+
+        return OutputModelStructure.model_validate(res, strict=False)
+
+    except Exception as e:
+        print("Error occurred while getting context from fireworks: ", e)
+        return manual_parsing(len(sentences), res)
+
+
 async def get_context_summary_from_openai(context: str, sentences: List[str], is_deepseek=False) -> OutputModelStructure:
     res = None
     try:
@@ -176,8 +234,8 @@ async def get_context_summary_from_openai(context: str, sentences: List[str], is
         prompt = BULK_CONTEXT_PROMPT.format(
             CONTEXT=context, sentences_xml=sentences_xml, IDEAL_OUTPUT=ideal_output)
 
-        client = deepseek_client if is_deepseek else openai_client
-        model = "deepseek-chat" if is_deepseek else "gpt-4o-mini"
+        # client = deepseek_client if is_deepseek else openai_client
+        # model = "deepseek-chat" if is_deepseek else "gpt-4o-mini"
         response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0.0,
@@ -344,7 +402,7 @@ async def update_chunks(chunks: List[str], userId, memoryId) -> List[str]:
                 if model == 'openai':
                     output = await get_context_summary_from_openai(context_text, sentences, is_deepseek=False)
                 elif model == 'deepseek':
-                    output = await get_context_summary_from_openai(context_text, sentences, is_deepseek=True)
+                    output = await get_context_from_fireworks(context_text, sentences)
                 elif model == 'claude':
                     output = await get_context_summary_from_anthropic(context_text, sentences)
                 else:

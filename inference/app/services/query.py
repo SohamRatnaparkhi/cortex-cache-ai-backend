@@ -325,7 +325,7 @@ async def stream_response(
             )
 
             async for chunk in response:
-                print(chunk)
+                # print(chunk)
                 chunk_text = chunk.text
                 message_content.append(chunk_text)
                 # Format chunk for streaming
@@ -335,6 +335,85 @@ async def stream_response(
                     first_chunk = False
                 else:
                     yield f"data: {chunk_data}\n\n"
+        elif (llm_type == 'deepseek-r1'):
+            messages = [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            # import fireworks.client
+            # fireworks.client.api_key = os.getenv("FIREWORKS_API_KEY")
+            response = llms.fireworks_client.chat.completions.acreate(
+                model="accounts/fireworks/models/deepseek-r1",
+                messages=messages,
+                # prompt=prompt,
+                stream=True
+            )
+            reasoning_over = False
+            async for chunk in response:
+                # print("__________")
+                # print(chunk)
+                content = ""
+                if chunk and chunk.choices and chunk.choices[0]:
+                    content = chunk.choices[0].delta.content
+                chunk_text = content
+                # print(chunk_text)
+
+                if not chunk_text:
+                    continue
+                # print(content)
+                if not reasoning_over:
+                    type = "reasoning"
+                else:
+                    type = "data"
+                chunk_text = content
+                if '</think>' in content:
+                    reasoning_over = True
+
+                # if type == "reasoning":
+                #     print(chunk_text + " - " + type)
+
+                # type = 'data'
+                # Format chunk for streaming
+                if chunk_text:
+                    message_content.append(chunk_text)
+                    chunk_data = chunk_text.replace('\n', '\\n')
+                    if first_chunk:
+                        yield f"messageId: {message_id},{type} : {chunk_data}\n\n"
+                        first_chunk = False
+                    else:
+                        yield f"{type}: {chunk_data}\n\n"
+        elif (llm_type == 'deepseek-chat'):
+            messages = [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            response = llms.fireworks_client.chat.completions.acreate(
+                model="accounts/fireworks/models/deepseek-v3",
+                messages=messages,
+                # prompt=prompt,
+                stream=True
+            )
+
+            async for chunk in response:
+                print(chunk)
+                content = ""
+                if chunk and chunk.choices and chunk.choices[0]:
+                    content = chunk.choices[0].delta.content
+                chunk_text = content
+                print(chunk_text)
+                # Format chunk for streaming
+                if chunk_text:
+                    message_content.append(chunk_text)
+                    chunk_data = chunk_text.replace('\n', '\\n')
+                    if first_chunk:
+                        yield f"messageId: {message_id},data: {chunk_data}\n\n"
+                        first_chunk = False
+                    else:
+                        yield f"data: {chunk_data}\n\n"
         else:
             async for chunk in llm.astream([HumanMessage(content=prompt)]):
                 chunk_text = chunk.content
