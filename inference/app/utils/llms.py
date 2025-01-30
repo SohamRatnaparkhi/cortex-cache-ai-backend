@@ -79,7 +79,7 @@ deepseek_client = AsyncOpenAI(
     base_url="https://api.deepseek.com"
     # base_url="https://api.fireworks.ai/inference/v1"
 )
-print("FIREWORKS_API_KEY", FIREWORKS_API_KEY)
+# print("FIREWORKS_API_KEY", FIREWORKS_API_KEY)
 fireworks_client = AsyncFireworks(
     api_key=FIREWORKS_API_KEY,
 )
