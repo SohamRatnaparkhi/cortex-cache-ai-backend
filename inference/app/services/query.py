@@ -325,7 +325,7 @@ async def stream_response(
             )
 
             async for chunk in response:
-                print(chunk)
+                # print(chunk)
                 chunk_text = chunk.text
                 message_content.append(chunk_text)
                 # Format chunk for streaming
@@ -352,7 +352,7 @@ async def stream_response(
             )
             reasoning_over = False
             async for chunk in response:
-                print("__________")
+                # print("__________")
                 # print(chunk)
                 content = ""
                 if chunk and chunk.choices and chunk.choices[0]:
