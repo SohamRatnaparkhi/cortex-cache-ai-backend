@@ -138,3 +138,4 @@ weasel==0.4.1
 websockets==13.0.1
 wrapt==1.16.0
 yarl==1.11.1
+fireworks-ai==0.15.12
