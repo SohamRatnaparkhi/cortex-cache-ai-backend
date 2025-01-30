@@ -4,7 +4,6 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from fireworks.client import AsyncFireworks
 from langchain_anthropic import ChatAnthropic
-from langchain_fireworks import Fireworks
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
@@ -165,15 +164,6 @@ def get_answer_llm(llm_name: str = 'gpt-4o', is_pro: bool = False):
     if llm_name == 'llama-3.2-90b':
         return ChatGroq(
             model="llama-3.2-90b",
-            temperature=0.7,
-            max_tokens=1000,
-            timeout=None,
-            max_retries=3,
-        )
-
-    if llm_name == 'deepseek-r1':
-        return Fireworks(
-            model="deepseek-r1",
             temperature=0.7,
             max_tokens=1000,
             timeout=None,
